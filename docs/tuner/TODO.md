@@ -66,7 +66,7 @@ Key facts verified against this repo:
   Verify: `pnpm start` boots, app renders unchanged (clear cache:
   `pnpm start -- --clear` first run).
 
-- [ ] **0.3 metro.config.js** `todo`
+- [x] **0.3 metro.config.js** `done — subsumed into 5.1`
   Create with `getDefaultConfig(__dirname)` from `expo/metro-config`, export
   unchanged. Verify: `pnpm start -- --clear` boots, app renders unchanged.
 
@@ -179,12 +179,12 @@ Key facts verified against this repo:
 
 ## Phase 5 — Metro middleware + AST writer (node side)
 
-- [ ] **5.1 Middleware mount + ping** `todo`
+- [x] **5.1 Middleware mount + ping** `done`
   `metro.config.js`: `server.enhanceMiddleware` mounts handlers at
   `/__tuner/ping` (returns `{ok:true}`).
   Verify: `curl localhost:8081/__tuner/ping` while `pnpm start` runs.
 
-- [ ] **5.2 /__tuner/inspect** `todo`
+- [x] **5.2 /__tuner/inspect** `done`
   `src/devtools/tuner/server/inspect.js` (node-side, CommonJS): given
   `?loc=file:line:col`, parse the file with `@babel/parser` (typescript+jsx
   plugins), find the JSXElement at that position, resolve its style
@@ -194,7 +194,7 @@ Key facts verified against this repo:
   Verify: unit tests against fixture files covering all three shapes;
   `curl` against a real Playground loc returns its actual styles.
 
-- [ ] **5.3 /__tuner/write** `todo`
+- [x] **5.3 /__tuner/write** `done`
   `src/devtools/tuner/server/write.js`: POST `{loc, changes:{key:value}}`.
   Use magic-string–style minimal replacement (splice exact value ranges from
   the parsed AST; do NOT regenerate the file) so formatting/comments survive.
@@ -203,7 +203,7 @@ Key facts verified against this repo:
   Verify: unit tests on fixtures assert byte-exact expected outputs,
   including a file with comments around the style.
 
-- [ ] **5.4 Write-path edge cases** `todo`
+- [x] **5.4 Write-path edge cases** `done`
   Style arrays (write into the LAST object-literal member; if none writable,
   append a new object literal to the array), missing style prop entirely
   (inject `style={{…}}` — note: plugin already handles render-side; writer
@@ -305,6 +305,23 @@ Key facts verified against this repo:
   fallback is a context consumed inside the screen, or per-loc subscription
   that does not violate the Rules of Hooks. Do NOT solve by remounting with a
   `key` — that would reset app state on every slider tick.
+- [PHASE 5 DONE 2026-08-17] 18 fixture tests (79 repo total). Live e2e against
+  the running dev server: `/__tuner/ping` ok; `/__tuner/inspect` on the card
+  (22:6) returned its real StyleSheet values; `/__tuner/write` changed
+  borderRadius 12→28 + backgroundColor on the card and `git diff` showed a
+  surgical 2-line change with comments/formatting intact (reverted after).
+  Path traversal (`src/../package.json`) rejected with `bad-loc`.
+- [5.x DESIGN] Edits are byte-range splices on the source TEXT (AST gives
+  ranges; file is never regenerated) — formatting and comments survive. Inline
+  object insertions are single-line ON PURPOSE: a newline would shift the line
+  numbers of stamped elements below and invalidate every loc the running app
+  holds. StyleSheet-entry inserts are multiline (usually below the JSX).
+- [5.x SEMANTICS] Write targets: sheetRef → the StyleSheet entry (affects all
+  users of that entry, same as a hand edit); array → LAST object literal, or
+  append `{ … }` if members are all refs; none → inject `style={{ … }}`;
+  computed values (e.g. `padding: PAD`) → structured per-key failure, other
+  keys still applied. Duplicate keys → last occurrence edited (RN semantics).
+  Metro must be RESTARTED for metro.config.js changes (not hot-reloaded).
 - [PHASE 4 CONFIRMED ON DEVICE 2026-08-17] Sliders drag smoothly, colours
   apply, live repaint tracks the knobs. Three field bugs found by the user and
   fixed: (1) opacity seeded from `min` showing 0.00 on untouched elements —
