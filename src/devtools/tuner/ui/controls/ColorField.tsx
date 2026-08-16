@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { ACCENT } from '../theme';
+
 /** iOS system colours plus neutrals — enough to explore without a picker. */
 const SWATCHES = [
   '#FF3B30',
@@ -94,8 +96,6 @@ export function ColorField({ label, value, onChange, onReset }: Props) {
     </View>
   );
 }
-
-const ACCENT = '#00E0B8';
 
 const styles = StyleSheet.create({
   row: {

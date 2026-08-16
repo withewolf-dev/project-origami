@@ -17,6 +17,8 @@
  */
 const nodePath = require('path');
 
+const { formatLoc } = require('./loc');
+
 const RUNTIME_MODULE = 'src/devtools/tuner/runtime';
 const RESOLVE_STYLE = 'resolveStyle';
 const USE_VERSION = 'useTunerVersion';
@@ -71,12 +73,30 @@ module.exports = function tunerPlugin({ types: t }) {
     name: 'tuner',
     visitor: {
       Program: {
-        enter(_programPath, state) {
+        enter(programPath, state) {
           state.tunerRNLocals = new Set();
           state.tunerImports = new Map();
           state.tunerImportDecl = null;
           state.tunerRoot = state.file.opts.root || state.cwd;
           state.tunerComponents = new Set();
+          state.tunerProgramPath = programPath;
+
+          // File-level eligibility, decided ONCE per file rather than per
+          // element: must be under src/, never node_modules, and never the
+          // runtime module itself (it must not import itself).
+          state.tunerPosixRel = null;
+          const filename = state.file.opts.filename;
+          if (filename) {
+            const rel = nodePath.relative(state.tunerRoot, filename);
+            const parts = rel.split(nodePath.sep);
+            const posixRel = parts.join('/');
+            const skip =
+              rel.startsWith('..') ||
+              parts[0] !== 'src' ||
+              parts.includes('node_modules') ||
+              posixRel.replace(/\.[jt]sx?$/, '') === RUNTIME_MODULE;
+            if (!skip) state.tunerPosixRel = posixRel;
+          }
         },
 
         /**
@@ -111,21 +131,7 @@ module.exports = function tunerPlugin({ types: t }) {
       },
 
       JSXOpeningElement(path, state) {
-        const filename = state.file.opts.filename;
-        if (!filename) return;
-
-        const rel = nodePath.relative(state.tunerRoot, filename);
-        const parts = rel.split(nodePath.sep);
-        if (rel.startsWith('..') || parts[0] !== 'src' || parts.includes('node_modules')) {
-          return;
-        }
-
-        // Only the runtime module itself must be skipped, so it can never be
-        // rewritten to import itself. Everything else under the tuner
-        // directory IS stamped — notably Playground.tsx, the screen the whole
-        // system is developed against.
-        const posixRel = parts.join('/');
-        if (posixRel.replace(/\.[jt]sx?$/, '') === RUNTIME_MODULE) return;
+        if (!state.tunerPosixRel) return;
 
         const name = path.node.name;
         let eligible = false;
@@ -146,7 +152,11 @@ module.exports = function tunerPlugin({ types: t }) {
         // Spread props may carry style/__tunerLoc we cannot reason about.
         if (attributes.some((attr) => attr.type === 'JSXSpreadAttribute')) return;
 
-        const loc = `${posixRel}:${path.node.loc.start.line}:${path.node.loc.start.column}`;
+        const loc = formatLoc(
+          state.tunerPosixRel,
+          path.node.loc.start.line,
+          path.node.loc.start.column,
+        );
         attributes.push(t.jsxAttribute(t.jsxIdentifier('__tunerLoc'), t.stringLiteral(loc)));
 
         // Remember the owning function so Program.exit can subscribe it (3.3).
@@ -154,8 +164,7 @@ module.exports = function tunerPlugin({ types: t }) {
         if (ownerFn) state.tunerComponents.add(ownerFn);
 
         // --- style routing (3.2) ---
-        const programPath = path.findParent((p) => p.isProgram());
-        if (!programPath) return;
+        const programPath = state.tunerProgramPath;
 
         const styleAttr = attributes.find(
           (attr) => attr.type === 'JSXAttribute' && attr.name.name === 'style',

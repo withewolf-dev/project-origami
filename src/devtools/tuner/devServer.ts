@@ -9,7 +9,7 @@ import { NativeModules } from 'react-native';
  * plain HTTP because Metro's CDP inspector proxy rejects third-party
  * clients (task 1.3 finding).
  */
-export function getDevServerOrigin(): string {
+function getDevServerOrigin(): string {
   const scriptURL: string | undefined = NativeModules?.SourceCode?.scriptURL;
   const origin = scriptURL?.match(/^https?:\/\/[^/]+/)?.[0];
   return origin ?? 'http://localhost:8081';

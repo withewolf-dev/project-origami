@@ -59,11 +59,6 @@ export function getVersion(): number {
   return version;
 }
 
-/** All locs currently carrying an override — the "unsaved changes" set. */
-export function getOverriddenLocs(): string[] {
-  return Array.from(overrides.keys());
-}
-
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => {

@@ -2,7 +2,6 @@ import { resolveStyle } from './runtime';
 import {
   clearAll,
   clearOverride,
-  getOverriddenLocs,
   getOverride,
   getVersion,
   replaceOverride,
@@ -17,7 +16,6 @@ beforeEach(() => clearAll());
 describe('override store', () => {
   it('starts empty', () => {
     expect(getOverride(LOC)).toBeUndefined();
-    expect(getOverriddenLocs()).toEqual([]);
   });
 
   it('sets and reads an override', () => {
@@ -67,11 +65,6 @@ describe('override store', () => {
     unsubscribe();
   });
 
-  it('tracks which locs are overridden', () => {
-    setOverride(LOC, { opacity: 1 });
-    setOverride('src/other.tsx:3:2', { opacity: 0 });
-    expect(getOverriddenLocs().sort()).toEqual(['src/other.tsx:3:2', LOC].sort());
-  });
 });
 
 describe('resolveStyle', () => {

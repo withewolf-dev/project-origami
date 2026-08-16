@@ -5,4 +5,3 @@
  * production builds.
  */
 export { withTuner } from './TunerRoot';
-export type { TunerFrame, TunerHit, TunerMode } from './types';

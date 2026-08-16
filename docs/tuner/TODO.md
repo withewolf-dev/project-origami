@@ -305,6 +305,24 @@ Key facts verified against this repo:
   fallback is a context consumed inside the screen, or per-loc subscription
   that does not violate the Rules of Hooks. Do NOT solve by remounting with a
   `key` — that would reset app state on every slider tick.
+- [SIMPLIFY PASS 2026-08-17] 4-angle review (reuse/simplification/efficiency/
+  altitude), ~25 findings deduped, applied: ACCENT + highlight fill unified in
+  ui/theme.ts; loc wire format got one definition (loc.js: formatLoc/parseLoc,
+  used by plugin + middleware); hand-rolled AST walk replaced with
+  @babel/types.traverseFast; babel plugin computes file eligibility once per
+  Program (was per element) and stops re-finding programPath per element;
+  dismiss policy named (asSelectable) and now applied at BOTH hit-test sites
+  (select + post-save refresh — the latter previously bypassed it); key
+  validity declared as COLOR_KEYS.appliesTo + elementKind() instead of an
+  inline string check; dead Overlay.version prop, duplicate inline
+  useSyncExternalStore, unused getOverriddenLocs removed; Slider trackWidth
+  state→ref (no render reads it); middleware string-guards before URL parse;
+  /__tuner/inspect documented as deliberate curl diagnostic / v2 hook.
+  Skipped intentionally: Panel memoisation (whole-tree re-render dominates —
+  theatre), server AST walk indexing (parse cost dominates at button-press
+  frequency), shared Slider/ColorField header (2 sites, different right-side
+  content — premature), deleting inspect endpoint or collector.mjs (kept,
+  documented), zIndex hardening of panel layering (idiomatic RN as-is).
 - [PHASE 6 CONFIRMED ON DEVICE 2026-08-17] Full product loop verified by the
   user: tune card in simulator → Save → git diff showed the drags as source
   (backgroundColor #34C759, borderRadius 40, margin 14 on line 33) → app

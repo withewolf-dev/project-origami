@@ -1,5 +1,9 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { type GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { ACCENT } from '../theme';
+
+const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
 
 type Props = {
   label: string;
@@ -35,20 +39,21 @@ export function Slider({
   onChange,
   onReset,
 }: Props) {
-  const [trackWidth, setTrackWidth] = useState(0);
+  // Refs, not state: width and origin are only read inside the gesture
+  // handlers — nothing renders from them, so re-rendering on layout is waste.
+  const trackWidth = useRef(0);
   const trackRef = useRef<View>(null);
   const trackOriginX = useRef(0);
 
-  const ratio = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
+  const ratio = max > min ? clamp((value - min) / (max - min), 0, 1) : 0;
 
   const apply = (pageX: number) => {
-    if (trackWidth <= 0) return;
-    const x = pageX - trackOriginX.current;
-    const nextRatio = Math.min(1, Math.max(0, x / trackWidth));
+    if (trackWidth.current <= 0) return;
+    const nextRatio = clamp((pageX - trackOriginX.current) / trackWidth.current, 0, 1);
     const raw = min + nextRatio * (max - min);
     const stepped = Math.round(raw / step) * step;
     // Re-round to kill float drift from steps like 0.05.
-    const clean = Number(Math.min(max, Math.max(min, stepped)).toFixed(precision + 2));
+    const clean = Number(clamp(stepped, min, max).toFixed(precision + 2));
     if (clean !== value) onChange(clean);
   };
 
@@ -58,7 +63,7 @@ export function Slider({
     // cached layout-time origin can be stale by the time a drag starts.
     trackRef.current?.measureInWindow((x, _y, width) => {
       trackOriginX.current = x;
-      if (width > 0) setTrackWidth(width);
+      if (width > 0) trackWidth.current = width;
       apply(pageX);
     });
   };
@@ -79,7 +84,9 @@ export function Slider({
       <View
         ref={trackRef}
         style={styles.track}
-        onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+        onLayout={(event) => {
+          trackWidth.current = event.nativeEvent.layout.width;
+        }}
         onStartShouldSetResponder={() => true}
         onMoveShouldSetResponder={() => true}
         // The panel's control list scrolls vertically; without this it can
@@ -96,8 +103,6 @@ export function Slider({
     </View>
   );
 }
-
-const ACCENT = '#00E0B8';
 
 const styles = StyleSheet.create({
   row: {

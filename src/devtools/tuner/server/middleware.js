@@ -15,21 +15,19 @@
 const fs = require('fs');
 const path = require('path');
 
+const { parseLoc } = require('../loc');
 const { inspectSource, writeSource } = require('./core');
-
-const LOC_PATTERN = /^(.+):(\d+):(\d+)$/;
 
 function createTunerMiddleware(projectRoot) {
   /** Resolve a loc's file safely inside the project, or null. */
   function resolveLoc(loc) {
-    const match = LOC_PATTERN.exec(loc ?? '');
-    if (!match) return null;
-    const [, relFile, line, col] = match;
-    const absolute = path.resolve(projectRoot, relFile);
+    const parsed = parseLoc(loc);
+    if (!parsed) return null;
+    const absolute = path.resolve(projectRoot, parsed.file);
     // Must stay inside the project and inside src/ — this endpoint writes files.
     if (!absolute.startsWith(path.join(projectRoot, 'src') + path.sep)) return null;
     if (!fs.existsSync(absolute)) return null;
-    return { file: absolute, relFile, line: Number(line), col: Number(col) };
+    return { file: absolute, relFile: parsed.file, line: parsed.line, col: parsed.column };
   }
 
   function json(res, status, body) {
@@ -39,14 +37,21 @@ function createTunerMiddleware(projectRoot) {
   }
 
   return function tunerMiddleware(req, res, next) {
+    // Cheap string guard first: this middleware fronts Metro's whole chain,
+    // so every bundle/HMR request passes through here. Only tuner traffic
+    // pays for URL parsing.
+    if (!req.url.startsWith('/__tuner/')) return next();
     const url = new URL(req.url, 'http://localhost');
-    if (!url.pathname.startsWith('/__tuner/')) return next();
 
     try {
       if (url.pathname === '/__tuner/ping') {
         return json(res, 200, { ok: true });
       }
 
+      // NOTE: no in-app caller today — the panel seeds from the rendered
+      // style snapshot instead. Kept deliberately: it is the curl-able
+      // diagnostic for the write path's resolution rules, and the v2 hook
+      // for panel-side editability/per-key validation (see TODO Log).
       if (url.pathname === '/__tuner/inspect' && req.method === 'GET') {
         const target = resolveLoc(url.searchParams.get('loc'));
         if (!target) return json(res, 400, { error: 'bad-loc' });

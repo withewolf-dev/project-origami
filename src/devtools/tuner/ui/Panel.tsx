@@ -4,8 +4,7 @@ import { clearOverride, getOverride, replaceOverride, setOverride } from '../sto
 import type { SaveState, TunerHit } from '../types';
 import { ColorField } from './controls/ColorField';
 import { Slider } from './controls/Slider';
-
-const ACCENT = '#00E0B8';
+import { ACCENT } from './theme';
 
 /**
  * Numeric keys offered for every element (4.1 / 4.2). `fallback` is what an
@@ -20,11 +19,30 @@ const NUMERIC_KEYS = [
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, precision: 2, fallback: 1 },
 ] as const;
 
-/** Only offered when the element already has a numeric value for them. */
+/**
+ * Only offered when the element already has a numeric value for them
+ * (`fallback` is never reached — kept for shape-uniformity with NUMERIC_KEYS).
+ */
 const SIZE_KEYS = [
   { key: 'width', label: 'Width', min: 0, max: 420, step: 1, precision: 0, fallback: 0 },
   { key: 'height', label: 'Height', min: 0, max: 420, step: 1, precision: 0, fallback: 0 },
 ] as const;
+
+/**
+ * Colour keys with the element kinds they apply to. Key validity is enforced
+ * HERE, panel-side: the writer writes whatever it is told, and a `color:` on
+ * a View breaks typecheck (found via a real save — see TODO Log). New gated
+ * keys get an `appliesTo` entry, not an inline conditional.
+ */
+const COLOR_KEYS = [
+  { key: 'backgroundColor', label: 'Background', appliesTo: 'any' },
+  { key: 'color', label: 'Text colour', appliesTo: 'text' },
+] as const;
+
+/** Host element kind, classified from the native view name (e.g. RCTText). */
+function elementKind(hit: TunerHit | null): 'text' | 'view' {
+  return hit?.name?.includes('Text') ? 'text' : 'view';
+}
 
 type Props = {
   hit: TunerHit | null;
@@ -81,10 +99,12 @@ export function Panel({ hit, saveState, onExit, onResetAll, onSave }: Props) {
   };
 
   const sizeKeys = SIZE_KEYS.filter((entry) => asNumber(style[entry.key]) !== null);
+  const kind = elementKind(hit);
+  const colorKeys = COLOR_KEYS.filter((entry) => entry.appliesTo === 'any' || entry.appliesTo === kind);
 
-  // `color` is a Text style; offering it on a View writes a key that breaks
-  // typecheck (found via a real save). Gate it on the host element type.
-  const isText = hit?.name?.includes('Text') ?? false;
+  /** The per-key reset affordance, or undefined when the key isn't overridden. */
+  const resetFor = (key: string) =>
+    override && key in override ? () => resetKey(key) : undefined;
 
   return (
     <View style={[styles.panel, dockTop ? styles.dockTop : styles.dockBottom]}>
@@ -107,44 +127,31 @@ export function Panel({ hit, saveState, onExit, onResetAll, onSave }: Props) {
       {loc ? (
         <>
           <ScrollView style={{ maxHeight }} keyboardShouldPersistTaps="handled">
-            {[...NUMERIC_KEYS, ...sizeKeys].map((entry) => {
-              const current = asNumber(style[entry.key]) ?? entry.fallback;
-              const isOverridden = override ? entry.key in override : false;
-              return (
-                <Slider
-                  key={entry.key}
-                  label={entry.label}
-                  value={current}
-                  min={entry.min}
-                  max={entry.max}
-                  step={entry.step}
-                  precision={entry.precision}
-                  onChange={(next) => patch({ [entry.key]: next })}
-                  onReset={isOverridden ? () => resetKey(entry.key) : undefined}
-                />
-              );
-            })}
+            {[...NUMERIC_KEYS, ...sizeKeys].map((entry) => (
+              <Slider
+                key={entry.key}
+                label={entry.label}
+                value={asNumber(style[entry.key]) ?? entry.fallback}
+                min={entry.min}
+                max={entry.max}
+                step={entry.step}
+                precision={entry.precision}
+                onChange={(next) => patch({ [entry.key]: next })}
+                onReset={resetFor(entry.key)}
+              />
+            ))}
 
             <View style={styles.divider} />
 
-            <ColorField
-              label="Background"
-              value={asColor(style.backgroundColor)}
-              onChange={(next) => patch({ backgroundColor: next })}
-              onReset={
-                override && 'backgroundColor' in override
-                  ? () => resetKey('backgroundColor')
-                  : undefined
-              }
-            />
-            {isText ? (
+            {colorKeys.map((entry) => (
               <ColorField
-                label="Text colour"
-                value={asColor(style.color)}
-                onChange={(next) => patch({ color: next })}
-                onReset={override && 'color' in override ? () => resetKey('color') : undefined}
+                key={entry.key}
+                label={entry.label}
+                value={asColor(style[entry.key])}
+                onChange={(next) => patch({ [entry.key]: next })}
+                onReset={resetFor(entry.key)}
               />
-            ) : null}
+            ))}
           </ScrollView>
 
           {saveState.status === 'error' ? (

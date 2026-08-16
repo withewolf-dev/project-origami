@@ -2,12 +2,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { SaveState, TunerHit, TunerMode } from '../types';
 import { Panel } from './Panel';
+import { ACCENT, ACCENT_FILL } from './theme';
 
 type Props = {
   mode: TunerMode;
   hit: TunerHit | null;
-  /** Store version — unused directly; its change is what re-renders the tree. */
-  version: number;
   saveState: SaveState;
   onEnter: () => void;
   onExit: () => void;
@@ -65,7 +64,7 @@ export function Overlay({ mode, hit, saveState, onEnter, onExit, onSelect, onRes
             />
           ) : null}
 
-          <View pointerEvents="none" style={styles.modeBorder} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.modeBorder]} />
 
           <Panel
             hit={hit}
@@ -80,8 +79,6 @@ export function Overlay({ mode, hit, saveState, onEnter, onExit, onSelect, onRes
   );
 }
 
-const ACCENT = '#00E0B8';
-
 const styles = StyleSheet.create({
   // Invisible long-press target. Bottom-left, clear of the home indicator.
   cornerTrigger: {
@@ -95,14 +92,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 1.5,
     borderColor: ACCENT,
-    backgroundColor: 'rgba(0, 224, 184, 0.18)',
+    backgroundColor: ACCENT_FILL,
   },
   modeBorder: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
     borderWidth: 2,
     borderColor: ACCENT,
   },

@@ -1,9 +1,11 @@
 /**
- * Task 1.3 collector (docs/tuner/TODO.md) — dev tooling, not shipped.
+ * Generic device→terminal channel — dev tooling, not shipped.
  *
- * Metro's CDP inspector proxy refuses third-party debugger sockets (closes
- * 1006 even when idle), so the app pushes probe results here instead.
- * Prints whatever the device POSTs to http://localhost:8790/probe.
+ * Run it, then `fetch('http://localhost:8790/probe', { method: 'POST',
+ * body: JSON.stringify(anything) })` from app code to print structured data
+ * in the terminal. Exists because Metro's CDP inspector proxy refuses
+ * third-party debugger sockets (closes 1006 even when idle), so an agent
+ * cannot read app state any other way. First used for TODO task 1.3.
  */
 import http from 'node:http';
 

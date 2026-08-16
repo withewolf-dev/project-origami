@@ -9,6 +9,7 @@
  * numbers and invalidate every loc the running app is holding.
  */
 const { parse } = require('@babel/parser');
+const { traverseFast } = require('@babel/types');
 
 function parseSource(source) {
   return parse(source, {
@@ -17,24 +18,10 @@ function parseSource(source) {
   });
 }
 
-/** Depth-first walk over every AST node. */
-function walk(node, visit) {
-  if (!node || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    for (const child of node) walk(child, visit);
-    return;
-  }
-  if (typeof node.type === 'string') visit(node);
-  for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
-    walk(node[key], visit);
-  }
-}
-
 /** The JSXOpeningElement whose start is exactly line:col (the stamped loc). */
 function findElement(ast, line, col) {
   let found = null;
-  walk(ast.program, (node) => {
+  traverseFast(ast.program, (node) => {
     if (
       !found &&
       node.type === 'JSXOpeningElement' &&
@@ -50,7 +37,7 @@ function findElement(ast, line, col) {
 /** `styles.card` → the ObjectExpression for `card` inside StyleSheet.create. */
 function findSheetEntry(ast, objectName, propertyName) {
   let entry = null;
-  walk(ast.program, (node) => {
+  traverseFast(ast.program, (node) => {
     if (
       entry ||
       node.type !== 'VariableDeclarator' ||

@@ -1,16 +1,10 @@
-import {
-  type ComponentType,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
 import { DevSettings, Dimensions, StyleSheet, View } from 'react-native';
 
 import { postWrite } from './devServer';
 import { hitTestAtPoint } from './hitTest';
-import { clearAll, getOverride, getVersion, replaceOverride, subscribe } from './store';
+import { useTunerVersion } from './runtime';
+import { clearAll, getOverride, replaceOverride } from './store';
 import type { SaveState, TunerHit, TunerMode } from './types';
 import { Overlay } from './ui/Overlay';
 
@@ -19,6 +13,20 @@ const FAST_REFRESH_GRACE_MS = 1400;
 
 function describeFailures(failed: { key: string; reason: string }[]): string {
   return failed.map((f) => `${f.key}: ${f.reason}`).join(' · ');
+}
+
+/**
+ * Selection policy: a hit covering most of the display is the screen-sized
+ * container (tapping empty space resolves to the ScrollView) — nobody means
+ * to select that, so it reads as "dismiss". Named here so EVERY hit-test
+ * call site applies the same rule; the frame/window comparison is valid
+ * because the tuner root fills the window.
+ */
+function asSelectable(hit: TunerHit | null): TunerHit | null {
+  if (!hit) return null;
+  const window = Dimensions.get('window');
+  const huge = hit.frame.width * hit.frame.height > window.width * window.height * 0.7;
+  return huge ? null : hit;
 }
 
 /**
@@ -45,21 +53,16 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     const [hit, setHit] = useState<TunerHit | null>(null);
     const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
 
-    // `resolveStyle` is a plain function, not a hook (see docs/tuner/TODO.md
-    // Log — the plugin rewrites JSX inside callbacks and conditionals, where a
-    // hook would break the Rules of Hooks). So overrides cannot re-render their
-    // own component; re-render is driven from here instead. Subscribing to the
-    // store re-renders TunerRoot, which recreates the <App/> element and
-    // repaints the tree. Known limit: React.memo boundaries block propagation.
-    const overrideVersion = useSyncExternalStore(subscribe, getVersion, getVersion);
+    // Subscribe this component to override changes so the panel (which reads
+    // the store during render) repaints on every mutation. Stamped app
+    // components get the same hook injected by the babel plugin.
+    useTunerVersion();
 
     const enter = useCallback(() => setMode('selecting'), []);
     const exit = useCallback(() => {
       setMode('off');
       setHit(null);
     }, []);
-
-    const reset = useCallback(() => clearAll(), []);
 
     // Dev-menu entry (Cmd+D) alongside the corner long-press, so design mode
     // is discoverable without knowing the gesture.
@@ -72,18 +75,9 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
 
     const select = useCallback((x: number, y: number) => {
       lastTapRef.current = { x, y };
-      const result = hitTestAtPoint(appRef.current, x, y);
-
-      // A tap on empty space resolves to the screen-sized container (the
-      // ScrollView). Nobody means to select that by tapping outside the
-      // panel — treat it as "dismiss", matching tap-away expectations.
-      // Trade-off (logged): screen-level containers are not selectable.
-      const window = Dimensions.get('window');
-      const huge =
-        result && result.frame.width * result.frame.height > window.width * window.height * 0.7;
-
-      setHit(huge ? null : result);
-      setMode(result && !huge ? 'editing' : 'selecting');
+      const result = asSelectable(hitTestAtPoint(appRef.current, x, y));
+      setHit(result);
+      setMode(result ? 'editing' : 'selecting');
       setSaveState({ status: 'idle' });
     }, []);
 
@@ -102,11 +96,8 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       setSaveState({ status: 'saving' });
       try {
         const result = await postWrite(loc, { ...changes });
-        if (!('ok' in result) || !result.ok) {
-          setSaveState({
-            status: 'error',
-            message: 'error' in result ? `write failed: ${result.error}` : 'write failed',
-          });
+        if (!result.ok) {
+          setSaveState({ status: 'error', message: `write failed: ${result.error}` });
           return;
         }
         const failed = result.failed ?? [];
@@ -124,7 +115,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
           }
           const point = lastTapRef.current;
           if (point) {
-            const refreshed = hitTestAtPoint(appRef.current, point.x, point.y);
+            const refreshed = asSelectable(hitTestAtPoint(appRef.current, point.x, point.y));
             if (refreshed) setHit(refreshed);
           }
           setSaveState((state) => (state.status === 'saved' ? { status: 'idle' } : state));
@@ -144,12 +135,11 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
         <Overlay
           mode={mode}
           hit={hit}
-          version={overrideVersion}
           saveState={saveState}
           onEnter={enter}
           onExit={exit}
           onSelect={select}
-          onResetAll={reset}
+          onResetAll={clearAll}
           onSave={save}
         />
       </View>
