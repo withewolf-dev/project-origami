@@ -212,13 +212,13 @@ Key facts verified against this repo:
 
 ## Phase 6 — Save loop
 
-- [ ] **6.1 Save button** `todo`
+- [x] **6.1 Save button** `done — confirmed on device`
   Panel Save → POST pending override for the selected loc to `/__tuner/write`
   (dev-server URL from `Constants/expoConfig` or the bundle URL — note choice
   in Log). Disable while in flight.
   Verify: press Save → file on disk changes (check `git diff`).
 
-- [ ] **6.2 Handoff to Fast Refresh** `todo`
+- [x] **6.2 Handoff to Fast Refresh** `done — confirmed on device`
   On write success, clear that loc's override AFTER the next Fast Refresh
   lands (subscribe `DevSettings.onFastRefresh` or clear on a short delay —
   decide, note in Log). No visual flicker between override and refreshed
@@ -226,7 +226,7 @@ Key facts verified against this repo:
   Verify: save a borderRadius change → element stays visually constant
   through refresh; reload app → change persists (it's in source now).
 
-- [ ] **6.3 Error surface** `todo`
+- [x] **6.3 Error surface** `done — panel shows structured errors; override kept on failure`
   Writer failures (computed value, parse error, file drifted since inspect)
   return structured errors; panel shows them inline, override stays active
   so work isn't lost.
@@ -305,6 +305,25 @@ Key facts verified against this repo:
   fallback is a context consumed inside the screen, or per-loc subscription
   that does not violate the Rules of Hooks. Do NOT solve by remounting with a
   `key` — that would reset app state on every slider tick.
+- [PHASE 6 CONFIRMED ON DEVICE 2026-08-17] Full product loop verified by the
+  user: tune card in simulator → Save → git diff showed the drags as source
+  (backgroundColor #34C759, borderRadius 40, margin 14 on line 33) → app
+  reload keeps the look. Dev-server origin comes from
+  NativeModules.SourceCode.scriptURL, so device/LAN works, not just simulator.
+- [6.2 DECISION] Override is NOT cleared on write success — saved values and
+  override are identical, so keeping them merged through the Fast Refresh
+  window makes flicker impossible regardless of rebuild time. After a 1.4s
+  grace the applied keys are dropped and the selection re-hit-tested so the
+  panel reads post-save source. (RN exposes no public Fast Refresh event.)
+- [6.x BUG FOUND VIA REAL SAVE] Panel offered "Text colour" on a View; the
+  writer faithfully saved `color:` into a ViewStyle and typecheck broke.
+  Fixed by gating the control on hit.name containing 'Text'. Deeper lesson
+  for later phases: the panel decides WHAT keys are offered — the writer
+  writes whatever it is told, so key validity must be enforced panel-side
+  (or a server-side key allowlist per element type in v2).
+- [6.x UX DECISION] Tap resolving to a container >70% of screen area =
+  DISMISS, not select (tap-away closes the panel; ✕ then exits design mode).
+  Trade-off: screen-level containers are not selectable in v1.
 - [PHASE 5 DONE 2026-08-17] 18 fixture tests (79 repo total). Live e2e against
   the running dev server: `/__tuner/ping` ok; `/__tuner/inspect` on the card
   (22:6) returned its real StyleSheet values; `/__tuner/write` changed

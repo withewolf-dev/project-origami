@@ -34,7 +34,7 @@ export function Playground() {
         <Text>Inline-styled box</Text>
       </View>
 
-      <View style={[styles.badge, styles.badgeAccent]}>
+      <View style={[styles.badge, styles.badgeAccent, { margin: 14 }]}>
         <Text style={styles.badgeText}>Style-array badge</Text>
       </View>
     </ScrollView>

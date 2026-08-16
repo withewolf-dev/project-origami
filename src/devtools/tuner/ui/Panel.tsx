@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { clearOverride, getOverride, replaceOverride, setOverride } from '../store';
-import type { TunerHit } from '../types';
+import type { SaveState, TunerHit } from '../types';
 import { ColorField } from './controls/ColorField';
 import { Slider } from './controls/Slider';
 
@@ -28,8 +28,10 @@ const SIZE_KEYS = [
 
 type Props = {
   hit: TunerHit | null;
+  saveState: SaveState;
   onExit: () => void;
   onResetAll: () => void;
+  onSave: (loc: string) => void;
 };
 
 function asNumber(value: unknown): number | null {
@@ -51,7 +53,7 @@ function asColor(value: unknown): string | null {
  * Controls seed from `hit.style` (the element's flattened style as rendered),
  * so a slider starts at the element's real value rather than zero.
  */
-export function Panel({ hit, onExit, onResetAll }: Props) {
+export function Panel({ hit, saveState, onExit, onResetAll, onSave }: Props) {
   const { height: screenHeight } = useWindowDimensions();
 
   const loc = hit?.loc ?? null;
@@ -79,6 +81,10 @@ export function Panel({ hit, onExit, onResetAll }: Props) {
   };
 
   const sizeKeys = SIZE_KEYS.filter((entry) => asNumber(style[entry.key]) !== null);
+
+  // `color` is a Text style; offering it on a View writes a key that breaks
+  // typecheck (found via a real save). Gate it on the host element type.
+  const isText = hit?.name?.includes('Text') ?? false;
 
   return (
     <View style={[styles.panel, dockTop ? styles.dockTop : styles.dockBottom]}>
@@ -131,13 +137,21 @@ export function Panel({ hit, onExit, onResetAll }: Props) {
                   : undefined
               }
             />
-            <ColorField
-              label="Text colour"
-              value={asColor(style.color)}
-              onChange={(next) => patch({ color: next })}
-              onReset={override && 'color' in override ? () => resetKey('color') : undefined}
-            />
+            {isText ? (
+              <ColorField
+                label="Text colour"
+                value={asColor(style.color)}
+                onChange={(next) => patch({ color: next })}
+                onReset={override && 'color' in override ? () => resetKey('color') : undefined}
+              />
+            ) : null}
           </ScrollView>
+
+          {saveState.status === 'error' ? (
+            <Text style={styles.errorLine} numberOfLines={2}>
+              {saveState.message}
+            </Text>
+          ) : null}
 
           <View style={styles.footer}>
             <Text style={styles.json} numberOfLines={1}>
@@ -148,6 +162,19 @@ export function Panel({ hit, onExit, onResetAll }: Props) {
             </Pressable>
             <Pressable onPress={onResetAll} hitSlop={8}>
               <Text style={styles.footerAction}>Reset all</Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Save changes to source"
+              disabled={!override || saveState.status === 'saving'}
+              onPress={() => onSave(loc)}
+              style={[styles.saveButton, !override ? styles.saveButtonDisabled : null]}>
+              <Text style={styles.saveLabel}>
+                {saveState.status === 'saving'
+                  ? 'Saving…'
+                  : saveState.status === 'saved'
+                    ? 'Saved ✓'
+                    : 'Save'}
+              </Text>
             </Pressable>
           </View>
         </>
@@ -219,5 +246,23 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 11,
     fontWeight: '600',
+  },
+  saveButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: ACCENT,
+  },
+  saveButtonDisabled: {
+    opacity: 0.35,
+  },
+  saveLabel: {
+    color: '#00312A',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  errorLine: {
+    color: '#FF6B60',
+    fontSize: 11,
   },
 });

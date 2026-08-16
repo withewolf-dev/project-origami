@@ -7,6 +7,13 @@
  */
 export type TunerMode = 'off' | 'selecting' | 'editing';
 
+/** Save button lifecycle (docs/tuner/TODO.md, 6.1/6.3). */
+export type SaveState =
+  | { status: 'idle' }
+  | { status: 'saving' }
+  | { status: 'saved' }
+  | { status: 'error'; message: string };
+
 /** Screen-space rect, in the coordinate space of the tuner root view. */
 export type TunerFrame = {
   left: number;
