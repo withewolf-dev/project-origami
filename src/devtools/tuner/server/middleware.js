@@ -1,24 +1,63 @@
 /**
- * Design-tuner dev-server endpoints (docs/tuner/TODO.md 5.1–5.3).
+ * Design-tuner dev-server endpoints (docs/tuner/TODO.md 5.1–5.3 + 8.1).
  * Mounted by metro.config.js via `server.enhanceMiddleware`; runs inside
  * Metro's Node process. Transport is plain HTTP — Metro's CDP inspector
- * proxy rejects third-party clients (verified in task 1.3), so the app
- * talks to these endpoints directly.
+ * proxy rejects third-party clients (verified in task 1.3), so both the app
+ * and the dashboard talk to these endpoints directly.
  *
+ * Source endpoints (phase 5):
  *   GET  /__tuner/ping                 → { ok: true }
  *   GET  /__tuner/inspect?loc=<loc>    → { shape, editable } | { error }
  *   POST /__tuner/write { loc, changes } → { ok, applied, failed } | { error }
  *
+ * Hub endpoints (phase 8) — shared state between the running app and the
+ * browser dashboard; in-memory, lives exactly as long as the dev server:
+ *   POST /__tuner/app/tree { tree }    app pushes its stamped-element tree
+ *   POST /__tuner/app/hit { loc }      app reports an on-device selection
+ *   GET  /__tuner/app/commands         app drains queued browser commands
+ *   GET  /__tuner/ui/state             dashboard polls tree + selection
+ *   POST /__tuner/ui/select { loc }    browser selects an element
+ *   POST /__tuner/ui/override { loc, patch }  browser edits a value live
+ *
  * loc format: "src/path/File.tsx:line:col" — exactly what the babel plugin
  * stamps and the in-app overlay reads back from the inspector.
  */
+/* global __dirname */
 const fs = require('fs');
 const path = require('path');
 
 const { parseLoc } = require('../loc');
 const { inspectSource, writeSource } = require('./core');
 
+/** Queued browser→app commands are capped so an absent app can't grow it. */
+const MAX_COMMANDS = 100;
+
+/** Dashboard counts as live when it polled within this window (used by 8.9). */
+const UI_LIVE_MS = 3000;
+
+function readJsonBody(req, callback) {
+  let body = '';
+  req.on('data', (chunk) => (body += chunk));
+  req.on('end', () => {
+    try {
+      callback(null, JSON.parse(body || '{}'));
+    } catch (error) {
+      callback(error, null);
+    }
+  });
+}
+
 function createTunerMiddleware(projectRoot) {
+  const hub = {
+    tree: null,
+    treeAt: 0,
+    selection: null,
+    /** { name, style } for the selected element — the inspector seeds from it. */
+    selectionMeta: null,
+    commands: [],
+    uiSeenAt: 0,
+  };
+
   /** Resolve a loc's file safely inside the project, or null. */
   function resolveLoc(loc) {
     const parsed = parseLoc(loc);
@@ -36,6 +75,36 @@ function createTunerMiddleware(projectRoot) {
     res.end(JSON.stringify(body));
   }
 
+  /**
+   * Long-poll support (latency fix): the app's command poll holds here until
+   * a command arrives, so browser edits land in ~one round-trip instead of
+   * waiting out a fixed poll interval.
+   */
+  let commandWaiter = null;
+
+  function commandsResponse() {
+    return {
+      commands: hub.commands.splice(0),
+      dashboardLive: Date.now() - hub.uiSeenAt < UI_LIVE_MS,
+    };
+  }
+
+  function flushCommandWaiter() {
+    if (!commandWaiter) return;
+    const { res, timer } = commandWaiter;
+    commandWaiter = null;
+    clearTimeout(timer);
+    json(res, 200, commandsResponse());
+  }
+
+  function pushCommand(command) {
+    hub.commands.push(command);
+    if (hub.commands.length > MAX_COMMANDS) {
+      hub.commands.splice(0, hub.commands.length - MAX_COMMANDS);
+    }
+    flushCommandWaiter();
+  }
+
   return function tunerMiddleware(req, res, next) {
     // Cheap string guard first: this middleware fronts Metro's whole chain,
     // so every bundle/HMR request passes through here. Only tuner traffic
@@ -47,6 +116,107 @@ function createTunerMiddleware(projectRoot) {
       if (url.pathname === '/__tuner/ping') {
         return json(res, 200, { ok: true });
       }
+
+      // The dashboard (8.4). Read from disk per request, deliberately:
+      // dashboard.html is editable without restarting Metro.
+      if (url.pathname === '/__tuner/' && req.method === 'GET') {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.end(fs.readFileSync(path.join(__dirname, 'dashboard.html')));
+        return;
+      }
+
+      // ---- hub: app side (8.1) ----
+
+      if (url.pathname === '/__tuner/app/tree' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || !body || typeof body !== 'object') {
+            return json(res, 400, { error: 'bad-json' });
+          }
+          hub.tree = body.tree ?? null;
+          hub.treeAt = Date.now();
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
+      if (url.pathname === '/__tuner/app/hit' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error) return json(res, 400, { error: 'bad-json' });
+          hub.selection = typeof body.loc === 'string' ? body.loc : null;
+          hub.selectionMeta = hub.selection
+            ? { name: body.name ?? null, style: body.style ?? null }
+            : null;
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
+      if (url.pathname === '/__tuner/app/commands' && req.method === 'GET') {
+        const wantsWait = url.searchParams.get('wait') === '1';
+        if (!wantsWait || hub.commands.length > 0) {
+          return json(res, 200, commandsResponse());
+        }
+        // Hold until a command arrives or the window closes. A newer poll
+        // replaces an older one (single app client) — release the old empty.
+        flushCommandWaiter();
+        const timer = setTimeout(() => flushCommandWaiter(), 10_000);
+        commandWaiter = { res, timer };
+        req.on('close', () => {
+          if (commandWaiter?.res === res) {
+            clearTimeout(commandWaiter.timer);
+            commandWaiter = null;
+          }
+        });
+        return;
+      }
+
+      // ---- hub: dashboard side (8.1) ----
+
+      if (url.pathname === '/__tuner/ui/state' && req.method === 'GET') {
+        hub.uiSeenAt = Date.now();
+        return json(res, 200, {
+          tree: hub.tree,
+          treeAt: hub.treeAt,
+          selection: hub.selection,
+          selectionMeta: hub.selectionMeta,
+        });
+      }
+
+      if (url.pathname === '/__tuner/ui/select' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || typeof body.loc !== 'string') return json(res, 400, { error: 'bad-loc' });
+          hub.selection = body.loc;
+          pushCommand({ type: 'select', loc: body.loc });
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
+      // Save routes THROUGH the app (8.8): the app owns the grace-window
+      // handoff and error surface — duplicating that logic browser-side was
+      // the alternative, rejected.
+      if (url.pathname === '/__tuner/ui/save' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || typeof body.loc !== 'string') return json(res, 400, { error: 'bad-loc' });
+          pushCommand({ type: 'save', loc: body.loc });
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
+      if (url.pathname === '/__tuner/ui/override' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || typeof body.loc !== 'string' || !body.patch || typeof body.patch !== 'object') {
+            return json(res, 400, { error: 'bad-override' });
+          }
+          pushCommand({ type: 'override', loc: body.loc, patch: body.patch });
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
+      // ---- source endpoints (phase 5) ----
 
       // NOTE: no in-app caller today — the panel seeds from the rendered
       // style snapshot instead. Kept deliberately: it is the curl-able
@@ -61,11 +231,10 @@ function createTunerMiddleware(projectRoot) {
       }
 
       if (url.pathname === '/__tuner/write' && req.method === 'POST') {
-        let body = '';
-        req.on('data', (chunk) => (body += chunk));
-        req.on('end', () => {
+        readJsonBody(req, (error, body) => {
           try {
-            const { loc, changes } = JSON.parse(body || '{}');
+            if (error) return json(res, 400, { error: 'bad-json' });
+            const { loc, changes } = body;
             const target = resolveLoc(loc);
             if (!target) return json(res, 400, { error: 'bad-loc' });
             if (!changes || typeof changes !== 'object' || Object.keys(changes).length === 0) {

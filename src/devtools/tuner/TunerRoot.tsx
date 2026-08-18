@@ -1,10 +1,11 @@
 import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
 import { DevSettings, Dimensions, StyleSheet, View } from 'react-native';
 
-import { postWrite } from './devServer';
+import { fetchCommands, postHit, postTree, postWrite } from './devServer';
 import { hitTestAtPoint } from './hitTest';
 import { useTunerVersion } from './runtime';
-import { clearAll, getOverride, replaceOverride } from './store';
+import { collectTree, filterTunerNodes, findFiberByLoc } from './treeWalker';
+import { clearAll, getOverride, replaceOverride, setOverride } from './store';
 import type { SaveState, TunerHit, TunerMode } from './types';
 import { Overlay } from './ui/Overlay';
 
@@ -56,12 +57,68 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     // Subscribe this component to override changes so the panel (which reads
     // the store during render) repaints on every mutation. Stamped app
     // components get the same hook injected by the babel plugin.
-    useTunerVersion();
+    const overrideVersion = useTunerVersion();
+
+    // Keep the highlight honest: overrides that change layout (margin,
+    // padding, size) move the element out from under the frame captured at
+    // selection time. Re-measure the selected instance after each store
+    // change, once layout has had a frame to settle.
+    useEffect(() => {
+      const loc = hit?.loc;
+      if (!loc) return;
+      const timer = setTimeout(() => {
+        const measure = findFiberByLoc(loc)?.stateNode?.measureInWindow;
+        if (typeof measure !== 'function') return;
+        measure((x, y, width, height) => {
+          setHit((current) => {
+            if (!current || current.loc !== loc) return current;
+            const f = current.frame;
+            const same =
+              Math.abs(f.left - x) < 0.5 &&
+              Math.abs(f.top - y) < 0.5 &&
+              Math.abs(f.width - width) < 0.5 &&
+              Math.abs(f.height - height) < 0.5;
+            return same ? current : { ...current, frame: { left: x, top: y, width, height } };
+          });
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }, [hit?.loc, overrideVersion]);
+
+    const designOpen = mode !== 'off';
 
     const enter = useCallback(() => setMode('selecting'), []);
     const exit = useCallback(() => {
       setMode('off');
       setHit(null);
+      postHit(null, null, null);
+    }, []);
+
+    /**
+     * Select an element by loc on the dashboard's behalf (8.6). Unlike a tap,
+     * a click on a NAMED row is unambiguous, so the tap-away dismiss policy
+     * (asSelectable) deliberately does not apply — this is how the screen
+     * container becomes selectable again, from the one surface where
+     * selecting it is clearly intentional.
+     */
+    const selectFromDashboard = useCallback((loc: string) => {
+      const fiber = findFiberByLoc(loc);
+      const measure = fiber?.stateNode?.measureInWindow;
+      if (!fiber || typeof measure !== 'function') return; // navigated away
+      measure((x, y, width, height) => {
+        let style: Record<string, unknown> | null = null;
+        try {
+          const flat = StyleSheet.flatten(fiber.memoizedProps?.style as never);
+          style = flat && typeof flat === 'object' ? (flat as Record<string, unknown>) : null;
+        } catch {
+          style = null;
+        }
+        const name = typeof fiber.type === 'string' ? fiber.type : null;
+        setHit({ frame: { left: x, top: y, width, height }, loc, name, hierarchy: [], style });
+        setMode('editing');
+        setSaveState({ status: 'idle' });
+        postHit(loc, name, style); // echo so the dashboard inspector seeds
+      });
     }, []);
 
     // Dev-menu entry (Cmd+D) alongside the corner long-press, so design mode
@@ -79,6 +136,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       setHit(result);
       setMode(result ? 'editing' : 'selecting');
       setSaveState({ status: 'idle' });
+      postHit(result?.loc ?? null, result?.name ?? null, result?.style ?? null); // 8.5
     }, []);
 
     /**
@@ -124,6 +182,42 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
         setSaveState({ status: 'error', message: 'dev server unreachable' });
       }
     }, []);
+
+    // 8.3/8.6/8.7/8.8: the hub loops, while design mode is open. Two paces:
+    // the tree pushes on a slow interval (it also catches changes the store
+    // never sees — navigation, list updates), while commands ride a
+    // continuous LONG-POLL so browser edits land in ~one round-trip instead
+    // of a poll interval (the user could feel the 1s version). Keyed on
+    // open/closed, NOT `mode`: selecting↔editing flips on every tap.
+    useEffect(() => {
+      if (!designOpen) return;
+      let active = true;
+
+      const push = () => postTree(filterTunerNodes(collectTree()));
+      push();
+      const interval = setInterval(push, 2000);
+
+      (async () => {
+        while (active) {
+          const commands = await fetchCommands(true);
+          if (!active) break;
+          for (const command of commands) {
+            if (command.type === 'select') selectFromDashboard(command.loc);
+            else if (command.type === 'override') setOverride(command.loc, command.patch);
+            else if (command.type === 'save') save(command.loc);
+          }
+          // Unreachable server returns [] immediately — don't hot-loop on it.
+          if (commands.length === 0) await new Promise((r) => setTimeout(r, 250));
+        }
+      })();
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+        postTree(null); // design mode closed — clear the dashboard
+        postHit(null, null, null);
+      };
+    }, [designOpen, selectFromDashboard, save]);
 
     // Both wrappers sit at the screen origin and fill it, so the overlay's
     // locationX/locationY are already in the app wrapper's coordinate space.

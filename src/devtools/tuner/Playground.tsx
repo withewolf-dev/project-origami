@@ -30,7 +30,7 @@ export function Playground() {
         <Text style={styles.buttonLabel}>Tapped {taps} times</Text>
       </Pressable>
 
-      <View style={{ backgroundColor: '#FFD60A', borderRadius: 4, padding: 12 }}>
+      <View style={{ backgroundColor: '#34C759', borderRadius: 47, padding: 15 }}>
         <Text>Inline-styled box</Text>
       </View>
 
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     color: '#3C3C43',
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#34C759',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -83,5 +83,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 13,
+    backgroundColor: '#FFCC00', opacity: 1, color: '#000000', margin: 30,
   },
 });

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { SaveState, TunerHit, TunerMode } from '../types';
 import { Panel } from './Panel';
-import { ACCENT, ACCENT_FILL } from './theme';
+import { ACCENT } from './theme';
 
 type Props = {
   mode: TunerMode;
@@ -88,11 +88,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
+  // Border only, no fill: a fill composites over the element's own colour
+  // (a yellow badge read olive while selected) — fatal in a tool whose job
+  // is judging colour.
   highlight: {
     position: 'absolute',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: ACCENT,
-    backgroundColor: ACCENT_FILL,
   },
   modeBorder: {
     borderWidth: 2,

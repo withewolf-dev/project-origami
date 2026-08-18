@@ -254,6 +254,85 @@ Key facts verified against this repo:
 
 ---
 
+## Phase 8 — Companion dashboard POC (browser chrome beside the simulator)
+
+Goal: a Layers tree + roomy inspector at `localhost:8081/__tuner/`, synced
+both ways with the app in design mode. POC constraints, chosen deliberately:
+plain HTTP polling (no WebSocket — CDP/WS paths are hostile, see 1.3 log),
+one static HTML file (no build step, no framework), tree without frames in
+v1 (frames measured on demand for the selected element only). The middleware
+is the hub; the app and the browser are both clients of it.
+
+Every task below ends with something the user can SEE — preview beats
+completeness at every step.
+
+- [x] **8.1 Hub state + endpoints** `done`
+  In-memory hub in the middleware: `{ tree, selection, commands }`.
+  Endpoints: `POST /__tuner/app/tree` (app pushes), `POST /__tuner/app/hit`
+  (app reports a tap), `GET /__tuner/app/commands` (app polls: pending
+  select/override from the browser), `GET /__tuner/ui/state` (dashboard
+  polls tree+selection), `POST /__tuner/ui/select`, `POST /__tuner/ui/override`.
+  Save reuses the existing `/__tuner/write` untouched.
+  Preview/Verify: curl each endpoint; POST a fake tree, GET it back.
+
+- [x] **8.2 Fiber tree walker (app side)** `done — confirmed on device`
+  `treeWalker.ts`: walk the DevTools hook's fiber roots (same hook hitTest
+  uses), collect stamped elements only → `{ loc, name, children }` nested.
+  No frames, no styles in v1.
+  Preview/Verify: unit-testable pure walk given a fake fiber; on device,
+  entering design mode logs the tree shape.
+
+- [x] **8.3 App push loop** `done — interval-based (see log); on-device confirm pending reload`
+  In design mode only: push the tree on entry and on every store-version
+  change (throttled ~1s); stop when mode is off.
+  Preview/Verify: `curl localhost:8081/__tuner/ui/state` shows the real
+  Playground tree while design mode is on, empty after exit.
+
+- [x] **8.4 Dashboard page v1 — Layers** `done — serves + renders; live-tree preview pending app reload`
+  Middleware serves one static HTML file at `/__tuner/`. Renders the layers
+  tree from a 500ms state poll: indented rows, element name + loc tail.
+  Dark, matches the panel's look (accent #00E0B8, mono values).
+  Preview: browser open next to the simulator showing the live tree. FIRST
+  visible payoff — demo checkpoint.
+
+- [x] **8.5 Tap sync: simulator → browser** `done — on-device confirm pending`
+  App POSTs the hit loc on every selection; dashboard highlights that row
+  (accent rail) and scrolls it into view.
+  Preview: tap the card on the phone → row lights up in the browser.
+
+- [x] **8.6 Click sync: browser → simulator** `done — on-device confirm pending`
+  Row click → `ui/select` command → app resolves the fiber by loc, measures
+  it (measureInWindow on its host node), builds a TunerHit, sets selection —
+  overlay highlight + panel follow. The dismiss policy (asSelectable) applies
+  here too, third call site.
+  Preview: click rows in the browser → teal highlight jumps around the phone.
+
+- [x] **8.7 Dashboard inspector — live controls** `done — on-device confirm pending`
+  Inspector column for the selected element: numeric inputs + sliders for the
+  same key tables the panel uses (share the tables — do NOT fork them), colour
+  swatches + free hex. Edits POST `ui/override`; app applies to the store on
+  its command poll → live repaint on device.
+  Preview: drag a slider in the browser, element repaints on the phone.
+  SECOND demo checkpoint — this is the Instatic-feel moment.
+
+- [x] **8.8 Dashboard Save** `done — routed through the app (see log)`
+  Save button in the inspector → existing `/__tuner/write` with the pending
+  override → clears applied keys after the grace window (mirror TunerRoot's
+  handoff, or route Save THROUGH the app via a command so the logic isn't
+  duplicated — decide, note here).
+  Preview: edit in browser → Save → `git diff` shows it.
+
+- [ ] **8.9 On-device panel yields to the dashboard** `todo`
+  Hub tracks dashboard liveness (last ui poll < 3s). App learns via its
+  command poll; when the dashboard is live, the phone panel collapses to the
+  selection chip (name + size + ✕) so the phone is all canvas.
+  Preview: open the dashboard → phone panel shrinks; close tab → panel returns.
+
+- [ ] **8.10 POC review + log** `todo`
+  Record in the Log: polling latency observed, tree size/walk cost on the
+  Playground, what breaks with two dashboards open, and the go/no-go list
+  for graduating past POC (SSE, frames in tree, prompt-at-point field).
+
 ## Later (explicitly out of v1 — do not start without asking)
 
 - Animation param panel (springs on sliders) — needs pixel→hook attribution.
@@ -274,6 +353,68 @@ Key facts verified against this repo:
 ## Log
 
 (append verification evidence here, newest last — `- [task] evidence`)
+
+- [8.1] All six hub endpoints curl-verified against the running dev server:
+  tree push → read-back byte-identical; ui/select + ui/override queue
+  commands; app/commands drains once then returns empty; dashboardLive true
+  within the 3s window; `not json` → bad-json, missing loc → bad-loc.
+  Commands queue capped at 100 (oldest dropped). `readJsonBody` helper also
+  replaced the write endpoint's inline body collection.
+- [8.2] `treeWalker.ts`: pure `walkFiberTree` over duck-typed fibers —
+  stamped nodes nest, unstamped wrappers hoist descendants, sibling order
+  preserved, non-string stamps ignored; `collectTree` reads
+  `hook.getFiberRoots` defensively (returns [] when absent — the log line in
+  TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
+  9 unit tests, 87 repo total.
+- [LATENCY FIX] User felt the browser→phone lag (up to 1s command poll).
+  Commands now ride a LONG-POLL: `GET /__tuner/app/commands?wait=1` holds at
+  the server until a command arrives (10s window, waiter released on
+  req close, newer poll replaces older); pushCommand flushes it. App runs a
+  continuous drain loop (250ms backoff only on empty/unreachable) while the
+  tree keeps its own 2s interval. Curl-proven: held request released the
+  instant the command was posted. Effective browser→phone latency ≈ 80ms
+  dashboard batch + one localhost round-trip. 8.10 should re-measure.
+- [8.5–8.8] Hub surface extended: app/hit carries {loc,name,style} →
+  hub.selectionMeta (inspector seeds from it); ui/save queues a save command.
+  Curl-verified. App loop is ONE 1s interval: push tree + drain commands
+  (select/override/save). Dashboard: row click → ui/select; inspector rebuilt
+  ONLY on selection change (a poll-time rebuild would yank sliders mid-drag);
+  live edits merged into one patch flushed every 80ms.
+- [8.6 DECISION — reverses the plan note] asSelectable does NOT apply to
+  dashboard selects: the policy exists because taps on empty space are
+  ambiguous; a click on a NAMED row is explicit intent. This is also how the
+  screen container becomes selectable again (dashboard-only).
+- [8.8 DECISION] Save routes THROUGH the app (command → TunerRoot.save):
+  the app owns the grace-window handoff + error surface; duplicating that
+  browser-side was rejected. Dashboard shows no save state in POC — the
+  phone panel does.
+- [8.6 RISK — unverified] selectFromDashboard measures via
+  fiber.stateNode.measureInWindow; believed present on both architectures,
+  proven only on device. If clicks do nothing, log here and fall back to
+  hierarchy-based measurement.
+- [8.3 DECISION] Push loop is a 2s interval while design mode is open, not a
+  store subscription: the interval also catches tree changes the store never
+  sees (navigation, list re-renders), and ~45 nodes of JSON every 2s is
+  nothing. Effect is keyed on designOpen (mode !== 'off'), NOT mode —
+  selecting↔editing flips on every tap and would churn the loop. On close,
+  the app pushes `tree: null` so the dashboard empties.
+- [8.3] filterTunerNodes strips the tuner's own UI from the pushed tree with
+  HOIST semantics (TunerRoot's wrapper contains the whole app — pruning its
+  subtree would prune everything); Playground.tsx is kept. 3 tests.
+- [8.4] Dashboard: one static HTML file served at /__tuner/ (read from disk
+  per request, so it is editable without restarting Metro). 500ms state
+  poll; re-renders ONLY when tree/selection changed (scroll stays put);
+  liveness dot keyed on treeAt < 6s. Verified: HTTP 200 text/html, fake
+  tree push renders (curl); real-tree preview = user opens design mode.
+- [8.2] CONFIRMED ON DEVICE 2026-08-18: `[tuner] tree: 45 stamped elements,
+  1 roots — first: src/devtools/tuner/TunerRoot.tsx:144:6`. RN 0.86's hook
+  exposes getFiberRoots as hoped.
+- [8.2 FINDING for 8.3] The walk INCLUDES THE TUNER'S OWN UI — TunerRoot's
+  wrapper is the first node, and opening the panel grew the tree 45→136
+  (every panel row is stamped, and scrubbing would re-push huge trees). The
+  8.3 push must filter out locs under `src/devtools/tuner/` EXCEPT
+  `Playground.tsx`, or the dashboard's Layers panel will be mostly the tuner
+  inspecting itself.
 
 - [3.1/3.2] 54 tests green (23 pre-existing + 8 stamping + 9 style-routing +
   14 store/resolveStyle). Transform verified by hand on all four style shapes:

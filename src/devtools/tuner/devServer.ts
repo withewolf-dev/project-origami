@@ -32,3 +32,52 @@ export async function postWrite(
   });
   return (await response.json()) as WriteResponse;
 }
+
+/**
+ * Push the stamped-element tree to the dashboard hub (8.3). Fire-and-forget:
+ * the hub being down (or Metro restarting) must never affect the app.
+ */
+export function postTree(tree: unknown): void {
+  fetch(`${getDevServerOrigin()}/__tuner/app/tree`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tree }),
+  }).catch(() => {});
+}
+
+/**
+ * Report the on-device selection to the hub (8.5), with the metadata the
+ * dashboard inspector seeds from. Fire-and-forget, like postTree.
+ */
+export function postHit(
+  loc: string | null,
+  name: string | null,
+  style: Record<string, unknown> | null,
+): void {
+  fetch(`${getDevServerOrigin()}/__tuner/app/hit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loc, name, style }),
+  }).catch(() => {});
+}
+
+export type HubCommand =
+  | { type: 'select'; loc: string }
+  | { type: 'override'; loc: string; patch: Record<string, unknown> }
+  | { type: 'save'; loc: string };
+
+/**
+ * Drain queued browser commands (8.6/8.7/8.8). With `wait`, the request
+ * long-polls: the server holds it until a command arrives (or ~10s), so
+ * browser edits reach the app in one round-trip. [] when unreachable.
+ */
+export async function fetchCommands(wait = false): Promise<HubCommand[]> {
+  try {
+    const suffix = wait ? '?wait=1' : '';
+    const response = await fetch(`${getDevServerOrigin()}/__tuner/app/commands${suffix}`);
+    const body = (await response.json()) as { commands?: HubCommand[] };
+    return Array.isArray(body.commands) ? body.commands : [];
+  } catch {
+    return [];
+  }
+}
