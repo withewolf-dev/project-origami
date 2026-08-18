@@ -443,6 +443,18 @@ future work, noted here so nobody wonders).
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [INSPECTOR V2 + CACHE FIX 2026-08-18] User called out that the dashboard
+  still showed slider soup — TWO causes. (1) /__tuner/ was served without
+  Cache-Control, so browsers could hold a stale dashboard indefinitely; all
+  tuner responses now send no-store. (2) The UX itself was wrong: sliders
+  impose fake ranges and stacked full-width rows waste the column. Inspector
+  v2: NO sliders — compact label+field grid rows, drag-on-label scrubbing
+  (1px = 1 step, Shift = 10×), typed exact values with native arrow-key
+  nudge, per-side/per-corner as ONE four-up row behind a ⿲ toggle, colours
+  as chip+hex with swatches in a click-popover, properties grouped into
+  sections (Layout/Spacing/Radius/Border/Typography/Fill/Effects/Size)
+  driven by a `section` field in the shared key tables. Phone panel keeps
+  scrub rows — correct for touch; the critique was about the pointer UI.
 - [PHASE 10 BUILT 2026-08-18] keys.js is the one home (13 numeric, 4 enum,
   3 colour keys + sizes) with per-key appliesTo; Panel imports it, middleware
   serves it at /__tuner/ui/keys, dashboard fetches at boot — the fork is

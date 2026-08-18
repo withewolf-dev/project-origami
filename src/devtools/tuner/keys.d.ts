@@ -8,6 +8,7 @@ export type NumericChildKey = {
 export type NumericKey = {
   key: string;
   label: string;
+  section: string;
   min: number;
   max: number;
   step: number;
@@ -23,6 +24,7 @@ export type NumericKey = {
 export type EnumKey = {
   key: string;
   label: string;
+  section: string;
   appliesTo: AppliesTo;
   options: readonly string[];
 };
@@ -30,6 +32,7 @@ export type EnumKey = {
 export type ColorKey = {
   key: string;
   label: string;
+  section: string;
   appliesTo: AppliesTo;
 };
 

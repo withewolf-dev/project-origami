@@ -75,6 +75,7 @@ function createTunerMiddleware(projectRoot) {
   function json(res, status, body) {
     res.statusCode = status;
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
     res.end(JSON.stringify(body));
   }
 
@@ -125,6 +126,9 @@ function createTunerMiddleware(projectRoot) {
       if (url.pathname === '/__tuner/' && req.method === 'GET') {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        // no-store is load-bearing: a cached dashboard silently runs OLD
+        // control code against a new hub — the user saw exactly that.
+        res.setHeader('Cache-Control', 'no-store');
         res.end(fs.readFileSync(path.join(__dirname, 'dashboard.html')));
         return;
       }

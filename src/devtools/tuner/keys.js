@@ -21,7 +21,7 @@
  */
 const NUMERIC_KEYS = [
   {
-    key: 'borderRadius', label: 'Radius', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
+    key: 'borderRadius', label: 'Radius', section: 'radius', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
     childrenLabel: 'per corner',
     children: [
       { key: 'borderTopLeftRadius', label: 'Top left' },
@@ -31,7 +31,7 @@ const NUMERIC_KEYS = [
     ],
   },
   {
-    key: 'padding', label: 'Padding', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
+    key: 'padding', label: 'Padding', section: 'spacing', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
     childrenLabel: 'per side',
     children: [
       { key: 'paddingTop', label: 'Top' },
@@ -41,7 +41,7 @@ const NUMERIC_KEYS = [
     ],
   },
   {
-    key: 'margin', label: 'Margin', min: -64, max: 64, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
+    key: 'margin', label: 'Margin', section: 'spacing', min: -64, max: 64, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
     childrenLabel: 'per side',
     children: [
       { key: 'marginTop', label: 'Top' },
@@ -50,9 +50,9 @@ const NUMERIC_KEYS = [
       { key: 'marginLeft', label: 'Left' },
     ],
   },
-  { key: 'gap', label: 'Gap', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
+  { key: 'gap', label: 'Gap', section: 'layout', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
   {
-    key: 'borderWidth', label: 'Border', min: 0, max: 8, step: 0.5, precision: 1, fallback: 0, appliesTo: 'any',
+    key: 'borderWidth', label: 'Width', section: 'border', min: 0, max: 8, step: 0.5, precision: 1, fallback: 0, appliesTo: 'any',
     childrenLabel: 'per side',
     children: [
       { key: 'borderTopWidth', label: 'Top' },
@@ -61,29 +61,29 @@ const NUMERIC_KEYS = [
       { key: 'borderLeftWidth', label: 'Left' },
     ],
   },
-  { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, precision: 2, fallback: 1, appliesTo: 'any' },
-  { key: 'fontSize', label: 'Font size', min: 8, max: 80, step: 1, precision: 0, fallback: 14, appliesTo: 'text' },
-  { key: 'lineHeight', label: 'Line height', min: 0, max: 96, step: 1, precision: 0, fallback: 0, appliesTo: 'text' },
-  { key: 'letterSpacing', label: 'Letter sp', min: -2, max: 8, step: 0.1, precision: 1, fallback: 0, appliesTo: 'text' },
+  { key: 'opacity', label: 'Opacity', section: 'effects', min: 0, max: 1, step: 0.05, precision: 2, fallback: 1, appliesTo: 'any' },
+  { key: 'fontSize', label: 'Size', section: 'typography', min: 8, max: 80, step: 1, precision: 0, fallback: 14, appliesTo: 'text' },
+  { key: 'lineHeight', label: 'Line height', section: 'typography', min: 0, max: 96, step: 1, precision: 0, fallback: 0, appliesTo: 'text' },
+  { key: 'letterSpacing', label: 'Letter sp', section: 'typography', min: -2, max: 8, step: 0.1, precision: 1, fallback: 0, appliesTo: 'text' },
 ];
 
 const ENUM_KEYS = [
-  { key: 'fontWeight', label: 'Weight', appliesTo: 'text', options: ['400', '500', '600', '700', '800'] },
-  { key: 'flexDirection', label: 'Direction', appliesTo: 'any', options: ['column', 'row'] },
-  { key: 'alignItems', label: 'Align', appliesTo: 'any', options: ['flex-start', 'center', 'flex-end', 'stretch'] },
-  { key: 'justifyContent', label: 'Justify', appliesTo: 'any', options: ['flex-start', 'center', 'space-between', 'flex-end'] },
+  { key: 'fontWeight', label: 'Weight', section: 'typography', appliesTo: 'text', options: ['400', '500', '600', '700', '800'] },
+  { key: 'flexDirection', label: 'Direction', section: 'layout', appliesTo: 'any', options: ['column', 'row'] },
+  { key: 'alignItems', label: 'Align', section: 'layout', appliesTo: 'any', options: ['flex-start', 'center', 'flex-end', 'stretch'] },
+  { key: 'justifyContent', label: 'Justify', section: 'layout', appliesTo: 'any', options: ['flex-start', 'center', 'space-between', 'flex-end'] },
 ];
 
 const COLOR_KEYS = [
-  { key: 'backgroundColor', label: 'Background', appliesTo: 'any' },
-  { key: 'color', label: 'Text colour', appliesTo: 'text' },
-  { key: 'borderColor', label: 'Border colour', appliesTo: 'any' },
+  { key: 'backgroundColor', label: 'Fill', section: 'fill', appliesTo: 'any' },
+  { key: 'color', label: 'Text', section: 'typography', appliesTo: 'text' },
+  { key: 'borderColor', label: 'Colour', section: 'border', appliesTo: 'any' },
 ];
 
 /** Only offered when the element already has a numeric value for them. */
 const SIZE_KEYS = [
-  { key: 'width', label: 'Width', min: 0, max: 420, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'height', label: 'Height', min: 0, max: 420, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
+  { key: 'width', label: 'W', section: 'size', min: 0, max: 420, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
+  { key: 'height', label: 'H', section: 'size', min: 0, max: 420, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
 ];
 
 module.exports = { NUMERIC_KEYS, ENUM_KEYS, COLOR_KEYS, SIZE_KEYS };

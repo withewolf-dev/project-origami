@@ -1,8 +1,15 @@
 <!doctype html>
 <!--
-  Design-tuner dashboard (docs/tuner/TODO.md, 8.4) — served by the Metro
-  middleware at /__tuner/. One file, no build step: edit and refresh.
-  Polls /__tuner/ui/state every 500ms (POC transport decision — see plan).
+  Design-tuner dashboard (docs/tuner/TODO.md, 8.4 + 10.x) — served by the
+  Metro middleware at /__tuner/ with Cache-Control: no-store. One file, no
+  build step: edit and refresh.
+
+  Inspector model (v2): NO sliders. Every numeric value is a compact
+  label+field row — drag horizontally on the LABEL to scrub (Figma's
+  gesture), type in the field for exact values, arrow keys nudge. Per-side /
+  per-corner longhands are ONE four-up row behind a corner toggle. Properties
+  group into sections (Layout / Spacing / Radius / ...) driven by the shared
+  key tables.
 -->
 <html lang="en">
 <head>
@@ -12,11 +19,11 @@
   :root {
     --accent: #00E0B8;
     --bg: #0e0f11;
-    --panel: #131417;
     --hairline: rgba(255, 255, 255, 0.09);
     --hot: #ffffff;
     --mid: rgba(255, 255, 255, 0.72);
     --dim: rgba(255, 255, 255, 0.40);
+    --field: rgba(255, 255, 255, 0.07);
     --mono: "SF Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; margin: 0; }
@@ -61,8 +68,7 @@
   }
   #status::before {
     content: "";
-    width: 7px;
-    height: 7px;
+    width: 7px; height: 7px;
     border-radius: 50%;
     background: var(--dim);
   }
@@ -71,7 +77,7 @@
 
   main { flex: 1; display: flex; min-height: 0; }
   #layers {
-    width: 340px;
+    width: 320px;
     border-right: 1px solid var(--hairline);
     overflow-y: auto;
     padding: 8px 0;
@@ -82,7 +88,7 @@
     gap: 8px;
     padding: 5px 16px 5px 0;
     border-left: 2px solid transparent;
-    cursor: default;
+    cursor: pointer;
     white-space: nowrap;
   }
   .row:hover { background: rgba(255, 255, 255, 0.04); }
@@ -98,63 +104,137 @@
     font-size: 10px;
     color: var(--dim);
   }
-  #empty {
-    padding: 24px 16px;
-    color: var(--dim);
-    font-size: 12px;
-    display: none;
-  }
+  #empty { padding: 24px 16px; color: var(--dim); font-size: 12px; display: none; }
+
   #inspector {
     flex: 1;
-    padding: 20px 24px;
-    color: var(--dim);
-    font-size: 12px;
+    padding: 18px 22px 28px;
     overflow-y: auto;
-    max-width: 460px;
+    max-width: 420px;
+    font-size: 12px;
   }
   #inspector h2 { font-size: 14px; color: var(--hot); font-weight: 600; }
   #inspector .subloc {
     font-family: var(--mono);
     font-size: 10px;
     color: var(--dim);
-    margin: 3px 0 18px;
+    margin-top: 3px;
   }
-  .ctl { margin-bottom: 14px; }
-  .ctl .top {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
+  h3.sec {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-weight: 600;
+    border-top: 1px solid var(--hairline);
+    margin-top: 16px;
+    padding-top: 12px;
+    margin-bottom: 10px;
   }
-  .ctl label { color: var(--mid); font-size: 12px; }
-  .ctl .num {
+  .prop {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    align-items: center;
+    margin-bottom: 8px;
+    min-height: 24px;
+  }
+  .prop > label {
+    font-size: 11px;
+    color: var(--mid);
+    user-select: none;
+  }
+  .prop > label.scrub { cursor: ew-resize; }
+  .prop > label.scrub:hover { color: var(--accent); }
+  .val { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+  .numIn {
+    width: 60px;
+    background: var(--field);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--hot);
     font-family: var(--mono);
     font-size: 12px;
+    padding: 4px 7px;
+    text-align: right;
+  }
+  .numIn:focus { outline: none; border-color: var(--accent); }
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .fourBtn {
+    width: 24px; height: 24px;
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    color: var(--dim);
+    font-size: 11px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .fourBtn.on { color: var(--accent); border-color: var(--accent); }
+  .four {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 2px 0 4px;
+  }
+  .four .cell span {
+    display: block;
+    font-size: 9px;
+    color: var(--dim);
+    text-align: center;
+    margin-bottom: 2px;
+    user-select: none;
+    cursor: ew-resize;
+  }
+  .four .cell input { width: 100%; text-align: center; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .segBtn {
+    background: var(--field);
+    border: 0;
+    border-radius: 6px;
+    color: var(--mid);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 9px;
+    cursor: pointer;
+  }
+  .segBtn.sel { background: var(--accent); color: #00312A; }
+  .chip {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.25);
+    cursor: pointer;
+    padding: 0;
+    flex: none;
+  }
+  .hexIn {
+    width: 84px;
+    background: var(--field);
+    border: 1px solid transparent;
+    border-radius: 6px;
     color: var(--hot);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 7px;
   }
-  .ctl input[type="range"] {
-    width: 100%;
-    accent-color: var(--accent);
+  .hexIn:focus { outline: none; border-color: var(--accent); }
+  .swatchPop {
+    grid-column: 1 / -1;
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0 4px;
   }
-  .swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .swatchPop.open { display: flex; }
   .swatch {
-    width: 22px; height: 22px;
+    width: 20px; height: 20px;
     border-radius: 5px;
     border: 1px solid rgba(255,255,255,0.2);
     cursor: pointer;
     padding: 0;
   }
-  .hex {
-    width: 110px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid var(--hairline);
-    border-radius: 6px;
-    color: var(--hot);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 5px 8px;
-  }
+  .actions { margin-top: 20px; display: flex; gap: 8px; align-items: center; }
   #saveBtn {
-    margin-top: 10px;
     background: var(--accent);
     color: #00312A;
     border: 0;
@@ -166,8 +246,6 @@
   }
   #saveBtn:active { opacity: 0.8; }
   .quiet {
-    margin-top: 10px;
-    margin-left: 8px;
     background: transparent;
     border: 1px solid var(--hairline);
     border-radius: 8px;
@@ -176,41 +254,7 @@
     padding: 8px 14px;
     cursor: pointer;
   }
-  .numIn {
-    width: 64px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid var(--hairline);
-    border-radius: 6px;
-    color: var(--hot);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 3px 6px;
-    text-align: right;
-  }
-  .expBtn {
-    background: transparent;
-    border: 0;
-    color: var(--dim);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 0 0 8px;
-  }
-  .ctl.sub { margin-left: 16px; margin-bottom: 10px; }
-  .subGroup { border-left: 1px solid var(--hairline); margin: 0 0 6px 4px; padding-left: 8px; }
-  .seg { display: flex; flex-wrap: wrap; gap: 5px; }
-  .segBtn {
-    background: rgba(255,255,255,0.08);
-    border: 0;
-    border-radius: 7px;
-    color: var(--mid);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 5px 10px;
-    cursor: pointer;
-  }
-  .segBtn.sel { background: var(--accent); color: #00312A; }
-  .hint { margin-top: 10px; font-size: 11px; color: var(--dim); }
-  .row { cursor: pointer; }
+  .hint { margin-top: 8px; font-size: 11px; color: var(--dim); }
 </style>
 </head>
 <body>
@@ -232,21 +276,29 @@
   const inspectorEl = document.getElementById('inspector');
   const modeBtn = document.getElementById('modeBtn');
 
-  let designOpen = false;
-  modeBtn.addEventListener('click', () => {
-    fetch('/__tuner/ui/mode', {
-      method: 'POST',
-      body: JSON.stringify({ on: !designOpen }),
-    }).catch(() => {});
-  });
-
   // Key tables come from the server (10.1) — ONE definition shared with the
   // phone panel; the dashboard never hardcodes what is tunable.
   let KEYS = { NUMERIC_KEYS: [], ENUM_KEYS: [], COLOR_KEYS: [], SIZE_KEYS: [] };
   fetch('/__tuner/ui/keys').then((r) => r.json()).then((k) => { KEYS = k; });
 
+  const SECTIONS = [
+    ['layout', 'Layout'], ['spacing', 'Spacing'], ['radius', 'Radius'],
+    ['border', 'Border'], ['typography', 'Typography'], ['fill', 'Fill'],
+    ['effects', 'Effects'], ['size', 'Size'],
+  ];
   const SWATCHES = ['#FF3B30','#FF9500','#FFCC00','#34C759','#00C7BE','#0A84FF',
                     '#5856D6','#AF52DE','#FFFFFF','#8E8E93','#3C3C43','#000000'];
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const displayName = (name) => esc(name.replace(/^RCT/, ''));
+  const locTail = (loc) => esc(loc.split('/').pop());
+
+  let designOpen = false;
+  modeBtn.addEventListener('click', () => {
+    fetch('/__tuner/ui/mode', { method: 'POST', body: JSON.stringify({ on: !designOpen }) })
+      .catch(() => {});
+  });
 
   // Live edits: merge into one patch, flush at most every 80ms (8.7).
   let pendingPatch = null, patchTimer = null, patchLoc = null;
@@ -261,12 +313,195 @@
     }, 80);
   }
 
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function postUndo() {
+    fetch('/__tuner/ui/undo', { method: 'POST' }).catch(() => {});
+  }
+  document.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
+      event.preventDefault();
+      postUndo();
+    }
+  });
 
-  /** "RCTText" → "Text"; loc tail "Playground.tsx:22:6". */
-  const displayName = (name) => esc(name.replace(/^RCT/, ''));
-  const locTail = (loc) => esc(loc.split('/').pop());
+  layersEl.addEventListener('click', (event) => {
+    const row = event.target.closest('.row');
+    if (!row) return;
+    fetch('/__tuner/ui/select', { method: 'POST', body: JSON.stringify({ loc: row.dataset.loc }) })
+      .catch(() => {});
+  });
+
+  /**
+   * Figma's gesture: drag horizontally on a label to scrub the paired field.
+   * 1px = 1 step; Shift = 10×. Typing and arrow keys live on the field.
+   */
+  function attachScrub(labelEl, inputEl, spec, apply) {
+    labelEl.classList.add('scrub');
+    labelEl.addEventListener('pointerdown', (down) => {
+      down.preventDefault();
+      labelEl.setPointerCapture(down.pointerId);
+      const startX = down.clientX;
+      const startValue = parseFloat(inputEl.value) || 0;
+      const move = (ev) => {
+        const mult = ev.shiftKey ? 10 : 1;
+        const raw = startValue + (ev.clientX - startX) * spec.step * mult;
+        const stepped = Math.round(raw / spec.step) * spec.step;
+        const next = Number(Math.min(spec.max, Math.max(spec.min, stepped)).toFixed(2));
+        if (String(next) !== inputEl.value) {
+          inputEl.value = next;
+          apply(next);
+        }
+      };
+      const up = () => {
+        labelEl.removeEventListener('pointermove', move);
+        labelEl.removeEventListener('pointerup', up);
+      };
+      labelEl.addEventListener('pointermove', move);
+      labelEl.addEventListener('pointerup', up);
+    });
+  }
+
+  function numericValue(style, key, fallback) {
+    return typeof style[key] === 'number' ? style[key] : fallback;
+  }
+
+  let renderedSelection = null;
+
+  function renderInspector(loc, meta) {
+    renderedSelection = loc;
+    if (!loc) {
+      inspectorEl.innerHTML = 'Select an element — tap on the phone, or click a layer row.';
+      return;
+    }
+    const style = (meta && meta.style) || {};
+    const name = (meta && meta.name) || 'element';
+    const kind = /Text/.test(name) ? 'text' : 'view';
+    const fits = (e) => e.appliesTo === 'any' || e.appliesTo === kind;
+
+    const numeric = KEYS.NUMERIC_KEYS.filter(fits).concat(
+      KEYS.SIZE_KEYS.filter((e) => typeof style[e.key] === 'number'));
+    const enums = KEYS.ENUM_KEYS.filter(fits);
+    const colors = KEYS.COLOR_KEYS.filter(fits);
+
+    let html = `<h2>${displayName(name)}</h2><div class="subloc">${esc(loc)}</div>`;
+
+    for (const [sectionId, sectionTitle] of SECTIONS) {
+      const nums = numeric.filter((e) => e.section === sectionId);
+      const segs = enums.filter((e) => e.section === sectionId);
+      const cols = colors.filter((e) => e.section === sectionId);
+      if (nums.length + segs.length + cols.length === 0) continue;
+
+      html += `<h3 class="sec">${sectionTitle}</h3>`;
+
+      for (const c of nums) {
+        const value = numericValue(style, c.key, c.fallback);
+        html += `<div class="prop"><label data-scrub="${c.key}">${c.label}</label>` +
+          `<div class="val">` +
+          (c.children
+            ? `<button class="fourBtn" data-four="${c.key}" title="${c.childrenLabel}">⿲</button>`
+            : '') +
+          `<input type="number" class="numIn" data-key="${c.key}" data-spec="${c.key}"` +
+          ` min="${c.min}" max="${c.max}" step="${c.step}" value="${value}"></div>`;
+        if (c.children) {
+          html += `<div class="four" id="four-${c.key}" style="display:none">` +
+            c.children.map((child) => {
+              const childValue = numericValue(style, child.key, value);
+              const initials = child.label.split(' ').map((w) => w[0].toUpperCase()).join('');
+              return `<div class="cell"><span data-scrub="${child.key}" title="${child.label}">${initials}</span>` +
+                `<input type="number" class="numIn" data-key="${child.key}" data-spec="${c.key}"` +
+                ` min="${c.min}" max="${c.max}" step="${c.step}" value="${childValue}"></div>`;
+            }).join('') + `</div>`;
+        }
+        html += `</div>`;
+      }
+
+      for (const e of segs) {
+        const current = style[e.key] != null ? String(style[e.key]) : '';
+        html += `<div class="prop"><label>${e.label}</label><div class="seg">` +
+          e.options.map((o) =>
+            `<button class="segBtn${o === current ? ' sel' : ''}" data-key="${e.key}"` +
+            ` data-value="${o}">${esc(o.replace('flex-', '').replace('space-', ''))}</button>`,
+          ).join('') + `</div></div>`;
+      }
+
+      for (const c of cols) {
+        const current = typeof style[c.key] === 'string' ? style[c.key] : '';
+        html += `<div class="prop"><label>${c.label}</label><div class="val">` +
+          `<button class="chip" data-pop="${c.key}" style="background:${esc(current) || 'transparent'}"></button>` +
+          `<input class="hexIn" data-key="${c.key}" placeholder="—" value="${esc(current)}"></div>` +
+          `<div class="swatchPop" id="pop-${c.key}">` +
+          SWATCHES.map((s) =>
+            `<button class="swatch" data-key="${c.key}" data-color="${s}" style="background:${s}"></button>`,
+          ).join('') + `</div></div>`;
+      }
+    }
+
+    html += `<div class="actions"><button id="saveBtn">Save to source</button>` +
+      `<button id="undoBtn" class="quiet">Undo (⌘Z)</button></div>` +
+      `<div class="hint">Drag a label to scrub · type for exact · Save writes the file.</div>`;
+    inspectorEl.innerHTML = html;
+
+    const specs = {};
+    for (const c of numeric) specs[c.key] = c;
+
+    inspectorEl.querySelectorAll('.numIn').forEach((input) => {
+      input.addEventListener('input', () => {
+        const value = parseFloat(input.value);
+        if (!Number.isNaN(value)) sendOverride(loc, input.dataset.key, value);
+      });
+    });
+    inspectorEl.querySelectorAll('[data-scrub]').forEach((labelEl) => {
+      const key = labelEl.dataset.scrub;
+      const input = inspectorEl.querySelector(`.numIn[data-key="${key}"]`);
+      const spec = specs[input.dataset.spec];
+      if (input && spec) {
+        attachScrub(labelEl, input, spec, (value) => sendOverride(loc, key, value));
+      }
+    });
+    inspectorEl.querySelectorAll('.fourBtn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const group = document.getElementById('four-' + button.dataset.four);
+        const open = group.style.display !== 'none';
+        group.style.display = open ? 'none' : 'grid';
+        button.classList.toggle('on', !open);
+      });
+    });
+    inspectorEl.querySelectorAll('.segBtn').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.parentElement.querySelectorAll('.segBtn').forEach((b) =>
+          b.classList.toggle('sel', b === button));
+        sendOverride(loc, button.dataset.key, button.dataset.value);
+      });
+    });
+    inspectorEl.querySelectorAll('.chip[data-pop]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        document.getElementById('pop-' + chip.dataset.pop).classList.toggle('open');
+      });
+    });
+    inspectorEl.querySelectorAll('.swatch').forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.key;
+        const color = button.dataset.color;
+        const hex = inspectorEl.querySelector(`.hexIn[data-key="${key}"]`);
+        const chip = inspectorEl.querySelector(`.chip[data-pop="${key}"]`);
+        if (hex) hex.value = color;
+        if (chip) chip.style.background = color;
+        sendOverride(loc, key, color);
+      });
+    });
+    inspectorEl.querySelectorAll('.hexIn').forEach((input) => {
+      input.addEventListener('change', () => {
+        const value = input.value.trim();
+        if (!/^#[0-9a-fA-F]{3,8}$/.test(value)) return;
+        const chip = inspectorEl.querySelector(`.chip[data-pop="${input.dataset.key}"]`);
+        if (chip) chip.style.background = value;
+        sendOverride(loc, input.dataset.key, value);
+      });
+    });
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      fetch('/__tuner/ui/save', { method: 'POST', body: JSON.stringify({ loc }) }).catch(() => {});
+    });
+    document.getElementById('undoBtn').addEventListener('click', postUndo);
+  }
 
   function renderTree(nodes, selection, depth, out) {
     for (const node of nodes) {
@@ -280,134 +515,6 @@
       renderTree(node.children, selection, depth + 1, out);
     }
   }
-
-  // Click a layer row → select on the phone (8.6).
-  layersEl.addEventListener('click', (event) => {
-    const row = event.target.closest('.row');
-    if (!row) return;
-    fetch('/__tuner/ui/select', {
-      method: 'POST',
-      body: JSON.stringify({ loc: row.dataset.loc }),
-    }).catch(() => {});
-  });
-
-  // Inspector (8.7): rebuilt only when the SELECTION changes, never on poll —
-  // a rebuild mid-drag would yank the slider out of the user's hand.
-  let renderedSelection = null;
-  function renderInspector(loc, meta) {
-    renderedSelection = loc;
-    if (!loc) {
-      inspectorEl.innerHTML = 'Select an element — tap on the phone, or click a layer row.';
-      return;
-    }
-    const style = (meta && meta.style) || {};
-    const name = (meta && meta.name) || 'element';
-    const kind = /Text/.test(name) ? 'text' : 'view';
-    const fits = (e) => e.appliesTo === 'any' || e.appliesTo === kind;
-
-    let html = `<h2>${displayName(name)}</h2><div class="subloc">${esc(loc)}</div>`;
-    const numeric = KEYS.NUMERIC_KEYS.filter(fits).concat(
-      KEYS.SIZE_KEYS.filter((e) => typeof style[e.key] === 'number'));
-    const numericRow = (c, value, sub) =>
-      `<div class="ctl${sub ? ' sub' : ''}"><div class="top"><label>${c.label}</label>` +
-      `<input type="number" class="numIn" id="num-${c.key}" data-key="${c.key}"` +
-      ` min="${c.min}" max="${c.max}" step="${c.step}" value="${value}"></div>` +
-      `<input type="range" data-key="${c.key}" min="${c.min}" max="${c.max}"` +
-      ` step="${c.step}" value="${value}"></div>`;
-
-    for (const c of numeric) {
-      const value = typeof style[c.key] === 'number' ? style[c.key] : c.fallback;
-      html += numericRow(c, value, false);
-      if (c.children) {
-        html += `<button class="expBtn" data-exp="${c.key}">▸ ${c.childrenLabel || 'per side'}</button>` +
-          `<div class="subGroup" id="exp-${c.key}" style="display:none">` +
-          c.children.map((child) => {
-            const childValue = typeof style[child.key] === 'number' ? style[child.key] : value;
-            return numericRow({ ...c, key: child.key, label: child.label }, childValue, true);
-          }).join('') + `</div>`;
-      }
-    }
-    for (const e of KEYS.ENUM_KEYS.filter(fits)) {
-      const current = style[e.key] != null ? String(style[e.key]) : '';
-      html += `<div class="ctl"><div class="top"><label>${e.label}</label></div><div class="seg">` +
-        e.options.map((o) =>
-          `<button class="segBtn${o === current ? ' sel' : ''}" data-key="${e.key}"` +
-          ` data-value="${o}">${esc(o.replace('flex-', '').replace('space-', ''))}</button>`,
-        ).join('') + `</div></div>`;
-    }
-    for (const c of KEYS.COLOR_KEYS.filter(fits)) {
-      const current = typeof style[c.key] === 'string' ? style[c.key] : '';
-      html += `<div class="ctl"><div class="top"><label>${c.label}</label>` +
-        `<span class="num">${esc(current || '—')}</span></div><div class="swatches">` +
-        SWATCHES.map((s) =>
-          `<button class="swatch" data-key="${c.key}" data-color="${s}" style="background:${s}"></button>`,
-        ).join('') +
-        `</div><input class="hex" data-key="${c.key}" placeholder="#RRGGBB" value="${esc(current)}"></div>`;
-    }
-    html += `<button id="saveBtn">Save to source</button>` +
-      ` <button id="undoBtn" class="quiet">Undo (⌘Z)</button>` +
-      `<div class="hint">Save writes the file — check git diff after.</div>`;
-    inspectorEl.innerHTML = html;
-
-    inspectorEl.querySelectorAll('input[type="range"]').forEach((input) => {
-      input.addEventListener('input', () => {
-        const value = parseFloat(input.value);
-        const box = document.getElementById('num-' + input.dataset.key);
-        if (box) box.value = value;
-        sendOverride(loc, input.dataset.key, value);
-      });
-    });
-    inspectorEl.querySelectorAll('.numIn').forEach((input) => {
-      input.addEventListener('input', () => {
-        const value = parseFloat(input.value);
-        if (Number.isNaN(value)) return;
-        const range = inspectorEl.querySelector(
-          `input[type="range"][data-key="${input.dataset.key}"]`);
-        if (range) range.value = value;
-        sendOverride(loc, input.dataset.key, value);
-      });
-    });
-    inspectorEl.querySelectorAll('.segBtn').forEach((button) => {
-      button.addEventListener('click', () => {
-        button.parentElement.querySelectorAll('.segBtn').forEach((b) =>
-          b.classList.toggle('sel', b === button));
-        sendOverride(loc, button.dataset.key, button.dataset.value);
-      });
-    });
-    inspectorEl.querySelectorAll('.swatch').forEach((button) => {
-      button.addEventListener('click', () =>
-        sendOverride(loc, button.dataset.key, button.dataset.color));
-    });
-    inspectorEl.querySelectorAll('.hex').forEach((input) => {
-      input.addEventListener('change', () => {
-        if (/^#[0-9a-fA-F]{3,8}$/.test(input.value.trim()))
-          sendOverride(loc, input.dataset.key, input.value.trim());
-      });
-    });
-    inspectorEl.querySelectorAll('.expBtn').forEach((button) => {
-      button.addEventListener('click', () => {
-        const group = document.getElementById('exp-' + button.dataset.exp);
-        const open = group.style.display !== 'none';
-        group.style.display = open ? 'none' : 'block';
-        button.textContent = (open ? '▸ ' : '▾ ') + button.textContent.slice(2);
-      });
-    });
-    document.getElementById('saveBtn').addEventListener('click', () => {
-      fetch('/__tuner/ui/save', { method: 'POST', body: JSON.stringify({ loc }) }).catch(() => {});
-    });
-    document.getElementById('undoBtn').addEventListener('click', postUndo);
-  }
-
-  function postUndo() {
-    fetch('/__tuner/ui/undo', { method: 'POST' }).catch(() => {});
-  }
-
-  document.addEventListener('keydown', (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
-      event.preventDefault();
-      postUndo();
-    }
-  });
 
   let lastPayload = '';
 
@@ -440,6 +547,8 @@
         emptyEl.style.display = hasTree ? 'none' : 'block';
         layersEl.style.display = hasTree ? 'block' : 'none';
       }
+      // Inspector rebuilds ONLY on selection change — a poll-time rebuild
+      // would yank a field out from under the user's edit.
       if (state.selection !== renderedSelection) {
         renderInspector(state.selection, state.selectionMeta);
       }
