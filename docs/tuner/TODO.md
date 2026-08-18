@@ -333,6 +333,45 @@ completeness at every step.
   Playground, what breaks with two dashboards open, and the go/no-go list
   for graduating past POC (SSE, frames in tree, prompt-at-point field).
 
+## Phase 9 — Extraction: the tuner as an installable package (PLANNED)
+
+Standing intent (2026-08-18): the tuner graduates out of this repo into a
+dev-dependency usable in any RN/Expo project — shape like argent's local
+install: one package exposing `withTuner`, a babel plugin entry, a Metro
+middleware entry, and the dashboard asset. Zero runtime deps stays a hard
+constraint (it is currently true).
+
+RULE FOR ALL FUTURE TUNER WORK: do not deepen repo coupling. Any new
+hardcoded path/assumption must be listed in the 9.1 inventory the moment it
+is written.
+
+- [ ] **9.1 Coupling inventory** `todo — live list, keep current`
+  Known repo-specific assumptions that extraction must turn into config:
+  - `babel-plugin.js`: `RUNTIME_MODULE = 'src/devtools/tuner/runtime'`;
+    stamps only under `src/` (both would become options: `include`,
+    `runtimeModule` resolved to the package)
+  - `treeWalker.ts`: filter hardcodes `src/devtools/tuner/` + Playground
+    exception (becomes: filter by the package's own marker, host app never
+    filtered)
+  - `server/middleware.js`: `src/`-only write guard (becomes `include`)
+  - `metro.config.js` / `babel.config.js` / root `index.ts`: three manual
+    wiring points (become documented install steps or an init script)
+  - `Playground.tsx`: app-specific; stays in the host app (or ships as an
+    optional demo screen)
+  Portable already: loc.js contract, store/runtime, hitTest, devServer
+  (origin from scriptURL), Panel key tables, dashboard.html, AST writer.
+- [ ] **9.2 Config seam** `todo`
+  One `tuner.config` object (include globs, runtime module id) consumed by
+  plugin + middleware + walker, defaulted to today's behaviour.
+- [ ] **9.3 Package split** `todo`
+  Move `src/devtools/tuner/` → `packages/tuner/` (or separate repo), package
+  exports: `.` (withTuner), `./babel`, `./metro`; this app becomes the first
+  consumer. Playground stays behind.
+- [ ] **9.4 Second-project smoke test** `todo`
+  Install into a fresh `npx create-expo-app`; the full loop (stamp → select
+  → override → save) works with zero code changes beyond the three wiring
+  points. That is the definition of "extracted".
+
 ## Later (explicitly out of v1 — do not start without asking)
 
 - Animation param panel (springs on sliders) — needs pixel→hook attribution.
