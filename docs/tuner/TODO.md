@@ -405,6 +405,14 @@ is written.
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [LIMITATION FOUND 2026-08-18] Native-stack modals escape the tuner.
+  Screens with `presentation: 'fullScreenModal'` render in a separate native
+  container ABOVE the root view — the overlay (border, tap capture, panel)
+  sits underneath and hit-testing can't reach the modal's subtree. Found via
+  the expense demo; fixed there by presenting as a card push. Applies to the
+  app's Session/Recap screens too. Real fix (later): mount a second overlay
+  inside modal screens, or portal the overlay into the topmost container.
+  Must be listed in the 7.3 README limitations.
 - [8.9] Panel collapses to the selection chip when `dashboardLive` (from the
   command-poll response) is true; hint line carries save state. Liveness lag:
   learned on the next long-poll resolution — up to ~10s after closing the

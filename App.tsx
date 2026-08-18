@@ -135,7 +135,11 @@ export default function App() {
           <Stack.Screen
             name="ExpenseDemo"
             // Full-bleed dark screen with its own ✕ — no system chrome.
-            options={{ presentation: 'fullScreenModal', headerShown: false }}>
+            // NOT a fullScreenModal: native-stack modals render in a separate
+            // native container ABOVE the root view, which puts them above the
+            // tuner overlay — design mode cannot reach a modal. (Known tuner
+            // limitation; also applies to Session/Recap.)
+            options={{ headerShown: false }}>
             {({ navigation }: NativeStackScreenProps<RootStackParamList, 'ExpenseDemo'>) => (
               <ExpenseCalculator onClose={() => navigation.goBack()} />
             )}
