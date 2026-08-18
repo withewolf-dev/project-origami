@@ -5,6 +5,7 @@ import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
 import { Pressable } from 'react-native';
 
+import { ExpenseCalculator } from './src/demo/ExpenseCalculator';
 import { Playground } from './src/devtools/tuner/Playground';
 import { gateLog } from './src/gate';
 import { ProgressScreen } from './src/screens/ProgressScreen';
@@ -21,6 +22,8 @@ type RootStackParamList = {
   Progress: undefined;
   // Dev-only design-tuner test bed; the screen is only registered in __DEV__.
   Playground: undefined;
+  // Dev-only tuner demo: a realistic dark UI (Revolut-style calculator).
+  ExpenseDemo: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -122,11 +125,21 @@ export default function App() {
           component={ProgressScreen}
         />
         {__DEV__ ? (
+          <Stack.Screen name="Playground" options={{ title: 'Playground' }}>
+            {({ navigation }: NativeStackScreenProps<RootStackParamList, 'Playground'>) => (
+              <Playground onOpenDemo={() => navigation.navigate('ExpenseDemo')} />
+            )}
+          </Stack.Screen>
+        ) : null}
+        {__DEV__ ? (
           <Stack.Screen
-            name="Playground"
-            options={{ title: 'Playground' }}
-            component={Playground}
-          />
+            name="ExpenseDemo"
+            // Full-bleed dark screen with its own ✕ — no system chrome.
+            options={{ presentation: 'fullScreenModal', headerShown: false }}>
+            {({ navigation }: NativeStackScreenProps<RootStackParamList, 'ExpenseDemo'>) => (
+              <ExpenseCalculator onClose={() => navigation.goBack()} />
+            )}
+          </Stack.Screen>
         ) : null}
       </Stack.Navigator>
     </NavigationContainer>

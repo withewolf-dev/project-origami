@@ -14,7 +14,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
  * Task 1.3 verified each element below resolves to its own source line via
  * getInspectorDataForViewAtPoint; keep the shapes varied when editing.
  */
-export function Playground() {
+export function Playground({ onOpenDemo }: { onOpenDemo?: () => void }) {
   const [taps, setTaps] = useState(0);
 
   return (
@@ -37,6 +37,10 @@ export function Playground() {
       <View style={[styles.badge, styles.badgeAccent, { margin: 14 }]}>
         <Text style={styles.badgeText}>Style-array badge</Text>
       </View>
+
+      <Pressable style={styles.demoLink} onPress={onOpenDemo}>
+        <Text style={styles.demoLinkLabel}>Open expense demo →</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -80,6 +84,15 @@ const styles = StyleSheet.create({
   },
   badgeAccent: {
     backgroundColor: '#D1F4D9',
+  },
+  demoLink: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  demoLinkLabel: {
+    color: '#007AFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   badgeText: {
     fontSize: 13,
