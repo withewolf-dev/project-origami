@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CascadingAmount } from './CascadingAmount';
+
 /**
  * Tuner demo screen (dev-only route): a Revolut-style expense calculator,
  * rebuilt in pure RN as a realistic tuning target — a dozen distinct
@@ -117,10 +119,7 @@ export function ExpenseCalculator({ onClose }: Props) {
         <View style={styles.expressionPill}>
           <Text style={styles.expressionText}>{expression}</Text>
         </View>
-        <Text style={styles.amount}>
-          <Text style={styles.amountSymbol}>€</Text>
-          {formatAmount(total)}
-        </Text>
+        <CascadingAmount symbol="€" value={formatAmount(total)} />
         <View style={styles.ratePill}>
           <Text style={styles.rateText}>⟳ ${usd} (€1 = $1,164) ›</Text>
         </View>
@@ -303,17 +302,6 @@ const styles = StyleSheet.create({
   expressionText: {
     color: '#8E8E93',
     fontSize: 15,
-  },
-  amount: {
-    color: '#FFFFFF',
-    fontSize: 76,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  amountSymbol: {
-    color: '#8E8E93',
-    fontSize: 56,
-    fontWeight: '700',
   },
   ratePill: {
     backgroundColor: '#1C1C1E',
