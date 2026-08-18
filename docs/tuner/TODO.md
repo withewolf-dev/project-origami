@@ -443,6 +443,17 @@ future work, noted here so nobody wonders).
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [TIER 2 SLICE 1: RESIZE GRIPS 2026-08-19] The selection border carries
+  three Figma-style grips (right edge, bottom edge, corner). Dragging writes
+  explicit width/height overrides live through the normal store path; the
+  drawn box follows the finger directly (a preview size), retiring only once
+  the ~50ms re-measure agrees — no snap-back. Grips render after the capture
+  layer so they own their touches. HONEST LIMITS, by design for slice 1:
+  writes explicit dimensions (same semantics as typing in W/H — hug-sized
+  elements gain fixed sizes, circles don't keep radius, flex-stretched
+  elements may fight their parent); undo + exit-discard are the safety nets.
+  Layout-aware mapping (pad-to-widen for hug pills, W+H+radius for circles,
+  refuse on flex-stretched) is the rest of Tier 2.
 - [BORDER UX 2026-08-19] User confusion report unpacked three issues:
   (1) Border "Width" edits were invisible — RN defaults borderColor to
   BLACK, so strokes on dark surfaces render unseen while still squeezing
