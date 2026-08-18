@@ -54,6 +54,8 @@ function createTunerMiddleware(projectRoot) {
     selection: null,
     /** { name, style } for the selected element — the inspector seeds from it. */
     selectionMeta: null,
+    /** Design-mode state as reported by the app (drives the dashboard button). */
+    designOpen: false,
     commands: [],
     uiSeenAt: 0,
   };
@@ -140,6 +142,15 @@ function createTunerMiddleware(projectRoot) {
         return;
       }
 
+      if (url.pathname === '/__tuner/app/mode' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error) return json(res, 400, { error: 'bad-json' });
+          hub.designOpen = body.open === true;
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
       if (url.pathname === '/__tuner/app/hit' && req.method === 'POST') {
         readJsonBody(req, (error, body) => {
           if (error) return json(res, 400, { error: 'bad-json' });
@@ -180,6 +191,7 @@ function createTunerMiddleware(projectRoot) {
           treeAt: hub.treeAt,
           selection: hub.selection,
           selectionMeta: hub.selectionMeta,
+          designOpen: hub.designOpen,
         });
       }
 
@@ -188,6 +200,17 @@ function createTunerMiddleware(projectRoot) {
           if (error || typeof body.loc !== 'string') return json(res, 400, { error: 'bad-loc' });
           hub.selection = body.loc;
           pushCommand({ type: 'select', loc: body.loc });
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
+      // Design mode is toggled FROM the dashboard — the app's dev-menu entry
+      // was removed once the browser became the primary editing surface.
+      if (url.pathname === '/__tuner/ui/mode' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || typeof body.on !== 'boolean') return json(res, 400, { error: 'bad-mode' });
+          pushCommand({ type: 'mode', on: body.on });
           return json(res, 200, { ok: true });
         });
         return;

@@ -1,7 +1,7 @@
 import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
-import { DevSettings, Dimensions, StyleSheet, View } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 
-import { fetchCommands, postHit, postTree, postWrite } from './devServer';
+import { fetchCommands, postHit, postMode, postTree, postWrite } from './devServer';
 import { hitTestAtPoint } from './hitTest';
 import { useTunerVersion } from './runtime';
 import { collectTree, filterTunerNodes, findFiberByLoc } from './treeWalker';
@@ -121,14 +121,6 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       });
     }, []);
 
-    // Dev-menu entry (Cmd+D) alongside the corner long-press, so design mode
-    // is discoverable without knowing the gesture.
-    useEffect(() => {
-      DevSettings.addMenuItem('Toggle Design Mode', () => {
-        setMode((current) => (current === 'off' ? 'selecting' : 'off'));
-        setHit(null);
-      });
-    }, []);
 
     const select = useCallback((x: number, y: number) => {
       lastTapRef.current = { x, y };
@@ -183,27 +175,25 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       }
     }, []);
 
-    // 8.3/8.6/8.7/8.8: the hub loops, while design mode is open. Two paces:
-    // the tree pushes on a slow interval (it also catches changes the store
-    // never sees — navigation, list updates), while commands ride a
-    // continuous LONG-POLL so browser edits land in ~one round-trip instead
-    // of a poll interval (the user could feel the 1s version). Keyed on
-    // open/closed, NOT `mode`: selecting↔editing flips on every tap.
+    // The command LONG-POLL runs for the whole dev session, not just while
+    // design mode is open — the dashboard is the trigger now (the dev-menu
+    // item was removed), so the app must be listening for the `mode` command
+    // before design mode exists. Held requests make idle cost one connection
+    // re-armed every ~10s.
     useEffect(() => {
-      if (!designOpen) return;
       let active = true;
-
-      const push = () => postTree(filterTunerNodes(collectTree()));
-      push();
-      const interval = setInterval(push, 2000);
-
       (async () => {
         while (active) {
           const { commands, dashboardLive: live } = await fetchCommands(true);
           if (!active) break;
           setDashboardLive(live);
           for (const command of commands) {
-            if (command.type === 'select') selectFromDashboard(command.loc);
+            if (command.type === 'mode') {
+              setMode(command.on ? 'selecting' : 'off');
+              setHit(null);
+              setSaveState({ status: 'idle' });
+              if (!command.on) postHit(null, null, null);
+            } else if (command.type === 'select') selectFromDashboard(command.loc);
             else if (command.type === 'override') setOverride(command.loc, command.patch);
             else if (command.type === 'save') save(command.loc);
           }
@@ -211,15 +201,26 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
           if (commands.length === 0) await new Promise((r) => setTimeout(r, 250));
         }
       })();
-
       return () => {
         active = false;
+      };
+    }, [selectFromDashboard, save]);
+
+    // Tree push while design mode is open (8.3), plus mode reporting so the
+    // dashboard's Enter/Exit button reflects reality. Keyed on open/closed,
+    // NOT `mode`: selecting↔editing flips on every tap.
+    useEffect(() => {
+      postMode(designOpen);
+      if (!designOpen) return;
+      const push = () => postTree(filterTunerNodes(collectTree()));
+      push();
+      const interval = setInterval(push, 2000);
+      return () => {
         clearInterval(interval);
-        setDashboardLive(false);
         postTree(null); // design mode closed — clear the dashboard
         postHit(null, null, null);
       };
-    }, [designOpen, selectFromDashboard, save]);
+    }, [designOpen]);
 
     // Both wrappers sit at the screen origin and fill it, so the overlay's
     // locationX/locationY are already in the app wrapper's coordinate space.

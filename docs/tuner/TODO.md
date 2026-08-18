@@ -110,7 +110,7 @@ Key facts verified against this repo:
   Verify: app interaction is 100% normal with overlay mounted (tap through
   every Playground element).
 
-- [x] **2.2 Triggers** `done — dev-menu item confirmed; corner long-press DROPPED 2026-08-18 (user: unneeded; invisible touch targets are mystery bugs). Dev menu is the single trigger; Overlay now renders null in off mode.`
+- [x] **2.2 Triggers** `done, then superseded 2026-08-18: corner long-press dropped, then the dev-menu item too — the DASHBOARD is now the sole trigger (Enter/Exit button → ui/mode command; app long-polls commands for the whole dev session so it can be woken). Phone exit via the chip ✕ still works.`
   (a) `DevSettings.addMenuItem('Design Mode', toggle)`;
   (b) invisible 44pt bottom-left corner view, 500ms long-press toggles mode.
   Verify: both paths flip mode; a thin colored border appears around the
@@ -405,6 +405,14 @@ is written.
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [TRIGGER MOVED TO DASHBOARD 2026-08-18] Dev-menu item removed (user:
+  browser is the editing surface). New: POST /__tuner/ui/mode {on} →
+  {type:'mode'} command; app reports state via /__tuner/app/mode so the
+  button reflects reality; the command long-poll now runs for the WHOLE dev
+  session (idle cost: one held connection re-armed ~10s). Mode border
+  restyled: 1.5px, inset 3pt, radius 52 (follows display corners), 70%
+  accent. Consequence: without the dashboard there is no way to enter design
+  mode — acceptable for the browser-first workflow, revisit at extraction.
 - [LIMITATION FOUND 2026-08-18] Native-stack modals escape the tuner.
   Screens with `presentation: 'fullScreenModal'` render in a separate native
   container ABOVE the root view — the overlay (border, tap capture, panel)

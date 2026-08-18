@@ -62,9 +62,19 @@ export function postHit(
 }
 
 export type HubCommand =
+  | { type: 'mode'; on: boolean }
   | { type: 'select'; loc: string }
   | { type: 'override'; loc: string; patch: Record<string, unknown> }
   | { type: 'save'; loc: string };
+
+/** Report design-mode state to the hub, so the dashboard button reflects it. */
+export function postMode(open: boolean): void {
+  fetch(`${getDevServerOrigin()}/__tuner/app/mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ open }),
+  }).catch(() => {});
+}
 
 export type CommandsResult = {
   commands: HubCommand[];

@@ -36,6 +36,21 @@
     border-bottom: 1px solid var(--hairline);
   }
   header h1 { font-size: 13px; font-weight: 600; color: var(--hot); }
+  #modeBtn {
+    border: 0;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 7px 14px;
+    cursor: pointer;
+    background: var(--accent);
+    color: #00312A;
+  }
+  #modeBtn.on {
+    background: transparent;
+    border: 1px solid var(--hairline);
+    color: var(--mid);
+  }
   #status {
     margin-left: auto;
     font-size: 11px;
@@ -157,11 +172,12 @@
 <body>
   <header>
     <h1>Design tuner</h1>
+    <button id="modeBtn">Enter design mode</button>
     <span id="status">waiting for app</span>
   </header>
   <main>
     <div id="layers"></div>
-    <div id="empty">Open design mode in the simulator — the layers tree appears here.</div>
+    <div id="empty">Design mode is off — click "Enter design mode" above.</div>
     <div id="inspector">Select an element — tap on the phone, or click a layer row.</div>
   </main>
 
@@ -170,6 +186,15 @@
   const emptyEl = document.getElementById('empty');
   const statusEl = document.getElementById('status');
   const inspectorEl = document.getElementById('inspector');
+  const modeBtn = document.getElementById('modeBtn');
+
+  let designOpen = false;
+  modeBtn.addEventListener('click', () => {
+    fetch('/__tuner/ui/mode', {
+      method: 'POST',
+      body: JSON.stringify({ on: !designOpen }),
+    }).catch(() => {});
+  });
 
   const NUMERIC = [
     { key: 'borderRadius', label: 'Radius', min: 0, max: 48, step: 1, fallback: 0 },
@@ -292,6 +317,10 @@
 
       statusEl.textContent = fresh ? 'app live' : 'waiting for app';
       statusEl.classList.toggle('live', fresh);
+
+      designOpen = state.designOpen === true;
+      modeBtn.textContent = designOpen ? 'Exit design mode' : 'Enter design mode';
+      modeBtn.classList.toggle('on', designOpen);
 
       // Re-render only when something changed — keeps scroll position stable.
       const payload = JSON.stringify([state.tree, state.selection]);

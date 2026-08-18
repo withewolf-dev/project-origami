@@ -69,7 +69,7 @@ export function Overlay({
         />
       ) : null}
 
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.modeBorder]} />
+      <View pointerEvents="none" style={styles.modeBorder} />
 
       <Panel
         hit={hit}
@@ -92,8 +92,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: ACCENT,
   },
+  // Design-mode indicator: a thin inset frame with a large radius so it
+  // follows the display's rounded corners instead of slicing across them,
+  // slightly translucent so it reads as chrome, not content.
   modeBorder: {
-    borderWidth: 2,
-    borderColor: ACCENT,
+    position: 'absolute',
+    left: 3,
+    right: 3,
+    top: 3,
+    bottom: 3,
+    borderWidth: 1.5,
+    borderRadius: 52,
+    borderColor: 'rgba(0, 224, 184, 0.7)',
   },
 });
