@@ -443,6 +443,13 @@ future work, noted here so nobody wonders).
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [COLOUR PICKER 2026-08-19] The chip popover is now the full Figma-style
+  picker: SV gradient square (drag anywhere, crosshair dot), hue strip,
+  swatches, hex field — all bidirectionally synced, vanilla JS, HSV↔hex
+  maths round-trip-verified on the palette. Alpha strip deferred (needs
+  #RRGGBBAA end-to-end through chip previews; writer already handles the
+  string). Phone ColorRow keeps swatches+hex — a 2D picker under a thumb on
+  a 36pt row is not the same tool.
 - [INSPECTOR V2 + CACHE FIX 2026-08-18] User called out that the dashboard
   still showed slider soup — TWO causes. (1) /__tuner/ was served without
   Cache-Control, so browsers could hold a stale dashboard indefinitely; all

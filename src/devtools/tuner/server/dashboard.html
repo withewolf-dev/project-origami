@@ -218,14 +218,51 @@
     padding: 4px 7px;
   }
   .hexIn:focus { outline: none; border-color: var(--accent); }
-  .swatchPop {
+  .picker {
     grid-column: 1 / -1;
     display: none;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px 0 4px;
+    padding: 10px 0 6px;
   }
-  .swatchPop.open { display: flex; }
+  .picker.open { display: block; }
+  .sv {
+    position: relative;
+    height: 140px;
+    border-radius: 8px;
+    cursor: crosshair;
+    touch-action: none;
+  }
+  .sv .dot {
+    position: absolute;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+    transform: translate(-6px, -6px);
+    pointer-events: none;
+  }
+  .strip {
+    position: relative;
+    height: 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+  .strip.hue {
+    background: linear-gradient(to right,
+      #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  }
+  .strip .handle {
+    position: absolute;
+    top: -2px;
+    width: 8px; height: 16px;
+    border-radius: 4px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+    transform: translateX(-4px);
+    pointer-events: none;
+  }
+  .swRow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .swatch {
     width: 20px; height: 20px;
     border-radius: 5px;
@@ -364,6 +401,134 @@
     return typeof style[key] === 'number' ? style[key] : fallback;
   }
 
+  // ---- colour maths (Figma-style picker) ----
+  function hexToRgb(hex) {
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    if (h.length !== 6 && h.length !== 8) return null;
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    };
+  }
+  function rgbToHsv({ r, g, b }) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    let h = 0;
+    if (d !== 0) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    return { h, s: max === 0 ? 0 : d / max, v: max };
+  }
+  function hsvToHex({ h, s, v }) {
+    const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) [r, g, b] = [c, x, 0];
+    else if (h < 120) [r, g, b] = [x, c, 0];
+    else if (h < 180) [r, g, b] = [0, c, x];
+    else if (h < 240) [r, g, b] = [0, x, c];
+    else if (h < 300) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+    const to2 = (n) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+    return `#${to2(r)}${to2(g)}${to2(b)}`.toUpperCase();
+  }
+
+  /** Horizontal/2D drag on a picker surface → cb(ratioX, ratioY), clamped. */
+  function attachDrag(el, cb) {
+    el.addEventListener('pointerdown', (down) => {
+      down.preventDefault();
+      el.setPointerCapture(down.pointerId);
+      const apply = (ev) => {
+        const rect = el.getBoundingClientRect();
+        cb(
+          Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)),
+          Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height)),
+        );
+      };
+      apply(down);
+      const move = (ev) => apply(ev);
+      const up = () => {
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+      };
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+    });
+  }
+
+  /**
+   * The full Figma-style picker behind a colour chip: SV gradient square +
+   * hue strip + swatches + hex field, all bidirectionally synced.
+   */
+  function setupPicker(loc, key) {
+    const chip = inspectorEl.querySelector(`.chip[data-pop="${key}"]`);
+    const hexIn = inspectorEl.querySelector(`.hexIn[data-key="${key}"]`);
+    const pop = document.getElementById('pop-' + key);
+    const sv = pop.querySelector('.sv');
+    const dot = pop.querySelector('.dot');
+    const hue = pop.querySelector('.strip.hue');
+    const hueHandle = hue.querySelector('.handle');
+
+    const state = { h: 0, s: 0, v: 1 };
+
+    function paint() {
+      const hueOnly = hsvToHex({ h: state.h, s: 1, v: 1 });
+      sv.style.background =
+        `linear-gradient(to top, #000, rgba(0,0,0,0)), ` +
+        `linear-gradient(to right, #fff, rgba(255,255,255,0)), ${hueOnly}`;
+      dot.style.left = `${state.s * 100}%`;
+      dot.style.top = `${(1 - state.v) * 100}%`;
+      hueHandle.style.left = `${(state.h / 360) * 100}%`;
+    }
+
+    function seed(hex) {
+      const rgb = hexToRgb(hex || '');
+      if (rgb) Object.assign(state, rgbToHsv(rgb));
+      paint();
+    }
+
+    function commit() {
+      const hex = hsvToHex(state);
+      hexIn.value = hex;
+      chip.style.background = hex;
+      paint();
+      sendOverride(loc, key, hex);
+    }
+
+    chip.addEventListener('click', () => {
+      seed(hexIn.value.trim());
+      pop.classList.toggle('open');
+    });
+    attachDrag(sv, (x, y) => {
+      state.s = x;
+      state.v = 1 - y;
+      commit();
+    });
+    attachDrag(hue, (x) => {
+      state.h = x * 360;
+      commit();
+    });
+    pop.querySelectorAll('.swatch').forEach((button) => {
+      button.addEventListener('click', () => {
+        seed(button.dataset.color);
+        commit();
+      });
+    });
+    hexIn.addEventListener('change', () => {
+      const value = hexIn.value.trim();
+      if (!/^#[0-9a-fA-F]{3,8}$/.test(value)) return;
+      seed(value);
+      chip.style.background = value;
+      sendOverride(loc, key, value);
+    });
+    seed(hexIn.value.trim());
+  }
+
   let renderedSelection = null;
 
   function renderInspector(loc, meta) {
@@ -428,10 +593,13 @@
         html += `<div class="prop"><label>${c.label}</label><div class="val">` +
           `<button class="chip" data-pop="${c.key}" style="background:${esc(current) || 'transparent'}"></button>` +
           `<input class="hexIn" data-key="${c.key}" placeholder="—" value="${esc(current)}"></div>` +
-          `<div class="swatchPop" id="pop-${c.key}">` +
+          `<div class="picker" id="pop-${c.key}">` +
+          `<div class="sv"><div class="dot"></div></div>` +
+          `<div class="strip hue"><div class="handle"></div></div>` +
+          `<div class="swRow">` +
           SWATCHES.map((s) =>
             `<button class="swatch" data-key="${c.key}" data-color="${s}" style="background:${s}"></button>`,
-          ).join('') + `</div></div>`;
+          ).join('') + `</div></div></div>`;
       }
     }
 
@@ -473,29 +641,7 @@
       });
     });
     inspectorEl.querySelectorAll('.chip[data-pop]').forEach((chip) => {
-      chip.addEventListener('click', () => {
-        document.getElementById('pop-' + chip.dataset.pop).classList.toggle('open');
-      });
-    });
-    inspectorEl.querySelectorAll('.swatch').forEach((button) => {
-      button.addEventListener('click', () => {
-        const key = button.dataset.key;
-        const color = button.dataset.color;
-        const hex = inspectorEl.querySelector(`.hexIn[data-key="${key}"]`);
-        const chip = inspectorEl.querySelector(`.chip[data-pop="${key}"]`);
-        if (hex) hex.value = color;
-        if (chip) chip.style.background = color;
-        sendOverride(loc, key, color);
-      });
-    });
-    inspectorEl.querySelectorAll('.hexIn').forEach((input) => {
-      input.addEventListener('change', () => {
-        const value = input.value.trim();
-        if (!/^#[0-9a-fA-F]{3,8}$/.test(value)) return;
-        const chip = inspectorEl.querySelector(`.chip[data-pop="${input.dataset.key}"]`);
-        if (chip) chip.style.background = value;
-        sendOverride(loc, input.dataset.key, value);
-      });
+      setupPicker(loc, chip.dataset.pop);
     });
     document.getElementById('saveBtn').addEventListener('click', () => {
       fetch('/__tuner/ui/save', { method: 'POST', body: JSON.stringify({ loc }) }).catch(() => {});

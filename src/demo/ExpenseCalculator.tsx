@@ -289,6 +289,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
+    borderRadius: 6, backgroundColor: '#5856D6', borderTopLeftRadius: 40, borderTopRightRadius: 40,
   },
   expressionPill: {
     backgroundColor: '#1C1C1E',
