@@ -547,6 +547,7 @@
     const enums = KEYS.ENUM_KEYS.filter(fits);
     const colors = KEYS.COLOR_KEYS.filter(fits);
 
+    const motionSpecs = {};
     let html = `<h2>${displayName(name)}</h2><div class="subloc">${esc(loc)}</div>`;
 
     for (const [sectionId, sectionTitle] of SECTIONS) {
@@ -603,6 +604,26 @@
       }
     }
 
+    // Motion: module-level animation constants for this element's file.
+    // Same controls, different write target (const, not element style).
+    const motion = meta && meta.motion;
+    if (motion) {
+      html += `<h3 class="sec">Motion · ${esc(motion.name)}</h3>`;
+      for (const [key, value] of Object.entries(motion.values)) {
+        const declared = motion.spec[key] != null ? motion.spec[key] : value;
+        const range = (motion.ranges && motion.ranges[key]) || {
+          min: 0,
+          max: Math.max(10, Math.round(declared * 4)),
+          step: Math.abs(declared) < 3 ? 0.05 : 1,
+        };
+        const spec = { key, label: key, ...range };
+        motionSpecs[key] = spec;
+        html += `<div class="prop"><label data-mscrub="${key}">${esc(key)}</label>` +
+          `<div class="val"><input type="number" class="numIn mIn" data-key="${key}"` +
+          ` min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div></div>`;
+      }
+    }
+
     html += `<div class="actions"><button id="saveBtn">Save to source</button>` +
       `<button id="undoBtn" class="quiet">Undo (⌘Z)</button></div>` +
       `<div class="hint">Drag a label to scrub · type for exact · Save writes the file.</div>`;
@@ -653,6 +674,25 @@
         attachScrub(labelEl, input, spec, (value) => sendOverride(loc, key, value));
       }
     });
+    const motion2 = meta && meta.motion;
+    if (motion2) {
+      const motionLoc = 'motion:' + motion2.id;
+      inspectorEl.querySelectorAll('.mIn').forEach((input) => {
+        input.addEventListener('input', () => {
+          const value = parseFloat(input.value);
+          if (!Number.isNaN(value)) sendOverride(motionLoc, input.dataset.key, value);
+        });
+      });
+      inspectorEl.querySelectorAll('[data-mscrub]').forEach((labelEl) => {
+        const key = labelEl.dataset.mscrub;
+        const input = inspectorEl.querySelector(`.mIn[data-key="${key}"]`);
+        if (input && motionSpecs[key]) {
+          attachScrub(labelEl, input, motionSpecs[key], (value) =>
+            sendOverride(motionLoc, key, value));
+        }
+      });
+    }
+
     inspectorEl.querySelectorAll('.fourBtn').forEach((button) => {
       button.addEventListener('click', () => {
         const group = document.getElementById('four-' + button.dataset.four);

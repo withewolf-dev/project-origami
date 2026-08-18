@@ -1,12 +1,13 @@
 import { type ComponentType, useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 
-import { fetchCommands, postHit, postMode, postTree, postWrite } from './devServer';
+import { fetchCommands, postHit, postMode, postTree, postWrite, postWriteConst } from './devServer';
 import { hitTestAtPoint } from './hitTest';
 import { useTunerVersion } from './runtime';
-import { collectTree, filterTunerNodes, findFiberByLoc } from './treeWalker';
+import { motionForLoc, motionKey } from './motion';
+import { collectTree, filterTunerNodes, findAllFibersByLoc, findFiberByLoc } from './treeWalker';
 import { clearAll, getOverride, replaceOverride, setOverride, undo } from './store';
-import type { SaveState, TunerHit, TunerMode } from './types';
+import type { SaveState, TunerFrame, TunerHit, TunerMode } from './types';
 import { Overlay } from './ui/Overlay';
 
 /** How long after a successful write we assume Fast Refresh has landed. */
@@ -95,6 +96,36 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     }, []);
 
     /**
+     * One JSX element can render many instances (a `.map()`), and they all
+     * share the loc — an edit hits all of them. Measure every instance so
+     * the overlay can outline the whole set instead of one glyph.
+     */
+    const measureInstances = useCallback((loc: string) => {
+      const fibers = findAllFibersByLoc(loc);
+      if (fibers.length < 2) return;
+      const frames: TunerFrame[] = [];
+      let settled = 0;
+      const finish = () => {
+        settled += 1;
+        if (settled < fibers.length) return;
+        setHit((current) =>
+          current && current.loc === loc ? { ...current, frames } : current,
+        );
+      };
+      for (const fiber of fibers) {
+        const measure = fiber.stateNode?.measureInWindow;
+        if (typeof measure !== 'function') {
+          finish();
+          continue;
+        }
+        measure((x, y, width, height) => {
+          frames.push({ left: x, top: y, width, height });
+          finish();
+        });
+      }
+    }, []);
+
+    /**
      * Select an element by loc on the dashboard's behalf (8.6). Unlike a tap,
      * a click on a NAMED row is unambiguous, so the tap-away dismiss policy
      * (asSelectable) deliberately does not apply — this is how the screen
@@ -114,22 +145,26 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
           style = null;
         }
         const name = typeof fiber.type === 'string' ? fiber.type : null;
-        setHit({ frame: { left: x, top: y, width, height }, loc, name, hierarchy: [], style });
+        const motion = motionForLoc(loc);
+        setHit({ frame: { left: x, top: y, width, height }, loc, name, hierarchy: [], style, motion });
         setMode('editing');
         setSaveState({ status: 'idle' });
-        postHit(loc, name, style); // echo so the dashboard inspector seeds
+        postHit(loc, name, style, motion); // echo so the dashboard inspector seeds
+        measureInstances(loc);
       });
-    }, []);
+    }, [measureInstances]);
 
 
     const select = useCallback((x: number, y: number) => {
       lastTapRef.current = { x, y };
-      const result = asSelectable(hitTestAtPoint(appRef.current, x, y));
+      const found = asSelectable(hitTestAtPoint(appRef.current, x, y));
+      const result = found ? { ...found, motion: motionForLoc(found.loc) } : null;
       setHit(result);
       setMode(result ? 'editing' : 'selecting');
       setSaveState({ status: 'idle' });
-      postHit(result?.loc ?? null, result?.name ?? null, result?.style ?? null); // 8.5
-    }, []);
+      postHit(result?.loc ?? null, result?.name ?? null, result?.style ?? null, result?.motion);
+      if (result?.loc) measureInstances(result.loc);
+    }, [measureInstances]);
 
     /**
      * Save → write source → hand off to Fast Refresh (6.1 / 6.2).
@@ -142,9 +177,29 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
      */
     const save = useCallback(async (loc: string) => {
       const changes = getOverride(loc);
-      if (!changes) return;
+      const motion = motionForLoc(loc);
+      const motionChanges = motion ? getOverride(motionKey(motion.id)) : undefined;
+      if (!changes && !motionChanges) return;
       setSaveState({ status: 'saving' });
       try {
+        // Motion constants live outside any element, so they take the
+        // const writer; one Save button persists everything pending.
+        if (motion && motionChanges) {
+          const motionResult = await postWriteConst(motion.id, motion.name, { ...motionChanges });
+          if (motionResult.ok) replaceOverride(motionKey(motion.id), null);
+          else {
+            setSaveState({ status: 'error', message: `motion: ${motionResult.error}` });
+            return;
+          }
+        }
+        if (!changes) {
+          setSaveState({ status: 'saved' });
+          setTimeout(
+            () => setSaveState((state) => (state.status === 'saved' ? { status: 'idle' } : state)),
+            FAST_REFRESH_GRACE_MS,
+          );
+          return;
+        }
         const result = await postWrite(loc, { ...changes });
         if (!result.ok) {
           setSaveState({ status: 'error', message: `write failed: ${result.error}` });

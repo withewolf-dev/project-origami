@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { COLOR_KEYS, ENUM_KEYS, NUMERIC_KEYS, SIZE_KEYS } from '../keys';
+import { motionKey } from '../motion';
 import { canUndo, clearOverride, getOverride, replaceOverride, setOverride, undo } from '../store';
 import type { SaveState, TunerHit } from '../types';
 import { ColorRow } from './controls/ColorRow';
@@ -89,7 +90,33 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
   };
 
   const isDirty = (key: string) => (override ? key in override : false);
-  const dirtyCount = override ? Object.keys(override).length : 0;
+
+  // Motion constants live outside the element (module-level consts), so they
+  // key off the file, not the loc — but they share the store, the undo
+  // stack, and the one Save button.
+  const motion = hit?.motion ?? null;
+  const motionOverride = motion ? getOverride(motionKey(motion.id)) : undefined;
+  const motionDirty = (key: string) => (motionOverride ? key in motionOverride : false);
+  const patchMotion = (key: string, value: number) => {
+    if (motion) setOverride(motionKey(motion.id), { [key]: value });
+  };
+  const resetMotionKey = (key: string) => {
+    if (!motion || !motionOverride) return;
+    const next = { ...motionOverride };
+    delete next[key];
+    replaceOverride(motionKey(motion.id), Object.keys(next).length > 0 ? next : null);
+  };
+  /** Unconfigured motion keys still get a usable range: 0…4× the default. */
+  const motionRange = (key: string, value: number) =>
+    motion?.ranges?.[key] ?? {
+      min: 0,
+      max: Math.max(10, Math.round(value * 4)),
+      step: Math.abs(value) < 3 ? 0.05 : 1,
+    };
+
+  const dirtyCount =
+    (override ? Object.keys(override).length : 0) +
+    (motionOverride ? Object.keys(motionOverride).length : 0);
 
   // Key validity lives in the shared tables (keys.js): the writer writes
   // whatever it is told, so what is OFFERED is the enforcement point.
@@ -112,6 +139,7 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
                 <Text style={styles.titleDim}>
                   {'  '}
                   {Math.round(hit.frame.width)}×{Math.round(hit.frame.height)}
+                  {hit.frames && hit.frames.length > 1 ? `  ·  ${hit.frames.length} instances` : ''}
                 </Text>
               </Text>
               <Text style={styles.subtitle} numberOfLines={1}>
@@ -198,6 +226,31 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
             ))}
 
             <View style={styles.sectionGap} />
+
+            {motion ? (
+              <>
+                <View style={styles.sectionGap} />
+                <Text style={styles.sectionLabel}>Motion · {motion.name}</Text>
+                {Object.entries(motion.values).map(([key, value]) => {
+                  const range = motionRange(key, motion.spec[key] ?? value);
+                  return (
+                    <ScrubRow
+                      key={key}
+                      label={key}
+                      value={value}
+                      min={range.min}
+                      max={range.max}
+                      step={range.step}
+                      precision={range.step < 1 ? 2 : 0}
+                      dirty={motionDirty(key)}
+                      onChange={(next) => patchMotion(key, next)}
+                      onReset={() => resetMotionKey(key)}
+                    />
+                  );
+                })}
+                <View style={styles.sectionGap} />
+              </>
+            ) : null}
 
             {colorKeys.map((entry) => (
               <ColorRow
@@ -311,6 +364,14 @@ const styles = StyleSheet.create({
   },
   sectionGap: {
     height: 10,
+  },
+  sectionLabel: {
+    color: TEXT_DIM,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   subRow: {
     paddingLeft: 16,

@@ -28,7 +28,7 @@ const path = require('path');
 
 const KEYS = require('../keys');
 const { parseLoc } = require('../loc');
-const { inspectSource, writeSource } = require('./core');
+const { inspectSource, writeConstSource, writeSource } = require('./core');
 
 /** Queued browser→app commands are capped so an absent app can't grow it. */
 const MAX_COMMANDS = 100;
@@ -161,7 +161,7 @@ function createTunerMiddleware(projectRoot) {
           if (error) return json(res, 400, { error: 'bad-json' });
           hub.selection = typeof body.loc === 'string' ? body.loc : null;
           hub.selectionMeta = hub.selection
-            ? { name: body.name ?? null, style: body.style ?? null }
+            ? { name: body.name ?? null, style: body.style ?? null, motion: body.motion ?? null }
             : null;
           return json(res, 200, { ok: true });
         });
@@ -267,6 +267,29 @@ function createTunerMiddleware(projectRoot) {
         const source = fs.readFileSync(target.file, 'utf8');
         const result = inspectSource(source, target.line, target.col);
         return json(res, result.error ? 422 : 200, { ...result, file: target.relFile });
+      }
+
+      // Motion constants (Motion section): same splice machinery, but the
+      // target is `const NAME = { … }` rather than an element's style.
+      if (url.pathname === '/__tuner/write-const' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          try {
+            if (error) return json(res, 400, { error: 'bad-json' });
+            const target = resolveLoc(`${body.file}:1:0`);
+            if (!target || typeof body.name !== 'string') return json(res, 400, { error: 'bad-target' });
+            if (!body.changes || Object.keys(body.changes).length === 0) {
+              return json(res, 400, { error: 'no-changes' });
+            }
+            const source = fs.readFileSync(target.file, 'utf8');
+            const result = writeConstSource(source, body.name, body.changes);
+            if (result.error) return json(res, 422, { error: result.error, failed: result.failed ?? [] });
+            fs.writeFileSync(target.file, result.code);
+            return json(res, 200, { ok: true, applied: result.applied, failed: result.failed });
+          } catch (writeError) {
+            return json(res, 500, { error: 'internal', detail: String(writeError.message) });
+          }
+        });
+        return;
       }
 
       if (url.pathname === '/__tuner/write' && req.method === 'POST') {

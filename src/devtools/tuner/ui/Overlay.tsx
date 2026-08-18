@@ -130,6 +130,14 @@ export function Overlay({
 
   if (mode === 'off') return null;
 
+  // Other instances of the same element (the tapped one is already drawn).
+  const instances: TunerFrame[] = (hit?.frames ?? []).filter(
+    (f) =>
+      !hit ||
+      Math.abs(f.left - hit.frame.left) > 0.5 ||
+      Math.abs(f.top - hit.frame.top) > 0.5,
+  );
+
   const frame: TunerFrame | null = hit
     ? {
         ...hit.frame,
@@ -165,7 +173,28 @@ export function Overlay({
         />
       ) : null}
 
-      {frame && loc ? (
+      {/* Sibling instances of the same JSX element: an edit hits all of
+          them, so all of them are outlined (quieter, to keep the tapped
+          one legible). */}
+      {instances.map((instance, index) => (
+        <View
+          key={index}
+          pointerEvents="none"
+          style={[
+            styles.instance,
+            {
+              left: instance.left,
+              top: instance.top,
+              width: instance.width,
+              height: instance.height,
+            },
+          ]}
+        />
+      ))}
+
+      {/* Grips are hidden for multi-instance selections: dragging one
+          instance's corner cannot mean anything coherent for the rest. */}
+      {frame && loc && instances.length === 0 ? (
         <>
           <Grip kind="r" loc={loc} frame={frame} onPreview={setDragSize} />
           <Grip kind="b" loc={loc} frame={frame} onPreview={setDragSize} />
@@ -195,6 +224,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 2,
     borderColor: ACCENT,
+  },
+  instance: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 224, 184, 0.45)',
   },
   // Figma-style grip: white square with an accent ring.
   grip: {

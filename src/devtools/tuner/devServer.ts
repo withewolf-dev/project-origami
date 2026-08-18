@@ -53,12 +53,27 @@ export function postHit(
   loc: string | null,
   name: string | null,
   style: Record<string, unknown> | null,
+  motion?: unknown,
 ): void {
   fetch(`${getDevServerOrigin()}/__tuner/app/hit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ loc, name, style }),
+    body: JSON.stringify({ loc, name, style, motion: motion ?? null }),
   }).catch(() => {});
+}
+
+/** Write motion constants back to `const <name> = { … }` in `file`. */
+export async function postWriteConst(
+  file: string,
+  name: string,
+  changes: Record<string, unknown>,
+): Promise<WriteResponse> {
+  const response = await fetch(`${getDevServerOrigin()}/__tuner/write-const`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file, name, changes }),
+  });
+  return (await response.json()) as WriteResponse;
 }
 
 export type HubCommand =

@@ -203,6 +203,89 @@ function insertIntoObject(source, obj, entriesText) {
   return { start: last.end, end: last.end, text: `,\n${indent}${entriesText}` };
 }
 
+/** `const NAME = { … }` — also finds it as a call argument, e.g. define(…, { … }). */
+function findConstObject(ast, name) {
+  let found = null;
+  traverseFast(ast.program, (node) => {
+    if (found || node.type !== 'VariableDeclarator') return;
+    if (node.id.type !== 'Identifier' || node.id.name !== name) return;
+    if (node.init?.type === 'ObjectExpression') {
+      found = node.init;
+    } else if (node.init?.type === 'CallExpression') {
+      for (const argument of node.init.arguments) {
+        if (argument.type === 'ObjectExpression') {
+          found = argument;
+          break;
+        }
+      }
+    }
+  });
+  return found;
+}
+
+/**
+ * Splice `changes` into one object literal: existing literal keys are
+ * replaced in place, missing keys inserted. Shared by the style writer and
+ * the motion-constant writer.
+ */
+function editObject(source, obj, changes) {
+  const edits = [];
+  const applied = [];
+  const failed = [];
+  const inserts = [];
+
+  for (const [key, value] of Object.entries(changes)) {
+    let text;
+    try {
+      text = serialize(value);
+    } catch {
+      failed.push({ key, reason: 'unserialisable-value' });
+      continue;
+    }
+    const prop = findProp(obj, key);
+    if (!prop) {
+      inserts.push(`${key}: ${text}`);
+      applied.push(key);
+    } else if (literalValue(prop.value) === NOT_LITERAL) {
+      failed.push({ key, reason: 'computed-value' });
+    } else {
+      edits.push({ start: prop.value.start, end: prop.value.end, text });
+      applied.push(key);
+    }
+  }
+
+  if (inserts.length > 0) edits.push(insertIntoObject(source, obj, inserts.join(', ')));
+  return { edits, applied, failed };
+}
+
+function applyEdits(source, edits) {
+  let code = source;
+  for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
+    code = code.slice(0, edit.start) + edit.text + code.slice(edit.end);
+  }
+  return code;
+}
+
+/**
+ * Apply `changes` to the literals of a module-level constant, e.g. the
+ * MOTION object a component declares for its animation. Style keys live on
+ * elements; animation parameters live here, where no element loc can reach.
+ */
+function writeConstSource(source, constName, changes) {
+  let ast;
+  try {
+    ast = parseSource(source);
+  } catch (parseError) {
+    return { error: 'parse-failed', detail: String(parseError.message) };
+  }
+  const obj = findConstObject(ast, constName);
+  if (!obj) return { error: 'const-not-found' };
+
+  const { edits, applied, failed } = editObject(source, obj, changes);
+  if (edits.length === 0) return { error: 'nothing-writable', failed };
+  return { code: applyEdits(source, edits), applied, failed };
+}
+
 /**
  * Apply `changes` ({ key: value }) to the element at line:col (5.3 / 5.4).
  * Returns { code, applied, failed } or { error }. Never throws on bad input.
@@ -289,4 +372,4 @@ function writeSource(source, line, col, changes) {
   return { code, applied, failed };
 }
 
-module.exports = { inspectSource, writeSource };
+module.exports = { inspectSource, writeSource, writeConstSource };

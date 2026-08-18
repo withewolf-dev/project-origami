@@ -112,6 +112,47 @@ function searchFiber(fiber: FiberLike | null | undefined, loc: string): Measurab
   return null;
 }
 
+/** Every fiber carrying `loc` — one JSX element can render N instances. */
+function searchAllFibers(
+  fiber: FiberLike | null | undefined,
+  loc: string,
+  out: MeasurableFiber[],
+): void {
+  let node = fiber;
+  while (node) {
+    if (node.memoizedProps?.__tunerLoc === loc) out.push(node as MeasurableFiber);
+    if (node.child) searchAllFibers(node.child, loc, out);
+    node = node.sibling;
+  }
+}
+
+function eachRoot(visit: (root: FiberLike | undefined) => void): void {
+  const hook = (globalThis as Record<string, unknown>).__REACT_DEVTOOLS_GLOBAL_HOOK__ as
+    | DevToolsHook
+    | undefined;
+  if (!hook?.renderers || typeof hook.getFiberRoots !== 'function') return;
+  for (const rendererId of hook.renderers.keys()) {
+    let roots: Set<{ current?: FiberLike }>;
+    try {
+      roots = hook.getFiberRoots(rendererId);
+    } catch {
+      continue;
+    }
+    for (const root of roots) visit(root.current);
+  }
+}
+
+/**
+ * All live instances of a stamped element. A `.map()` renders one JSX
+ * element many times — every instance shares the loc, and a StyleSheet edit
+ * genuinely affects all of them, so the tuner selects them as one.
+ */
+export function findAllFibersByLoc(loc: string): MeasurableFiber[] {
+  const found: MeasurableFiber[] = [];
+  eachRoot((root) => searchAllFibers(root, loc, found));
+  return found;
+}
+
 /**
  * The fiber whose stamp equals `loc`, or null (8.6 — dashboard clicks select
  * by loc, and the frame must be measured from the live instance).

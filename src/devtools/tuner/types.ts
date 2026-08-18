@@ -7,6 +7,20 @@
  */
 export type TunerMode = 'off' | 'selecting' | 'editing';
 
+/** A file's tunable motion constants, as offered in the Motion section. */
+export type MotionInfo = {
+  /** Registry id — also the source file the writer edits. */
+  id: string;
+  /** The exported const's name, e.g. "MOTION". */
+  name: string;
+  /** Declared defaults from source. */
+  spec: Record<string, number>;
+  /** Live values (defaults merged with any pending override). */
+  values: Record<string, number>;
+  /** Optional per-key {min,max,step}; inferred from the default otherwise. */
+  ranges?: Record<string, { min: number; max: number; step: number }>;
+};
+
 /** Save button lifecycle (docs/tuner/TODO.md, 6.1/6.3). */
 export type SaveState =
   | { status: 'idle' }
@@ -31,6 +45,14 @@ export type TunerHit = {
   name: string | null;
   /** Outer → inner component names, as returned by the inspector. */
   hierarchy: string[];
+  /**
+   * Every live instance's frame when one JSX element renders many (a
+   * `.map()`); length 1 for the ordinary case. All instances share the loc,
+   * so an edit affects all of them — the overlay outlines each.
+   */
+  frames?: TunerFrame[];
+  /** Tunable motion registered for this element's file (Motion section). */
+  motion?: MotionInfo | null;
   /**
    * The element's flattened style as currently rendered, INCLUDING any pending
    * override. Controls seed from this so a slider starts at the real value
