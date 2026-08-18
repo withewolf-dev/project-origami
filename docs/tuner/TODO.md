@@ -443,6 +443,14 @@ future work, noted here so nobody wonders).
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [UNSAVED-STATE FIX 2026-08-19] User: "changes are saved even without
+  Save". Audit: only two real write triggers exist (phone Save, dashboard
+  Save→command); the observation was overrides LINGERING after exiting
+  design mode — unsaved work kept rendering, indistinguishable from a save,
+  yet one reload from vanishing. Fix: exiting design mode discards all
+  unsaved overrides (clearAll in the designOpen effect cleanup), so outside
+  design mode the app always shows source truth. Recovery: clearAll is one
+  undo group — re-enter design mode and Undo restores the discarded edits.
 - [COLOUR PICKER 2026-08-19] The chip popover is now the full Figma-style
   picker: SV gradient square (drag anywhere, crosshair dot), hue strip,
   swatches, hex field — all bidirectionally synced, vanilla JS, HSV↔hex

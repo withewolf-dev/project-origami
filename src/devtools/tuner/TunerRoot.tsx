@@ -218,6 +218,12 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       const interval = setInterval(push, 2000);
       return () => {
         clearInterval(interval);
+        // Exiting design mode DISCARDS unsaved overrides: outside design
+        // mode the app must show source truth, nothing else. Lingering
+        // overrides looked exactly like a save that never happened (user
+        // report). clearAll records one undo group, so re-entering design
+        // mode + Undo recovers discarded work.
+        clearAll();
         postTree(null); // design mode closed — clear the dashboard
         postHit(null, null, null);
       };
