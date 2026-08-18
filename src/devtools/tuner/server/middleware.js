@@ -26,6 +26,7 @@
 const fs = require('fs');
 const path = require('path');
 
+const KEYS = require('../keys');
 const { parseLoc } = require('../loc');
 const { inspectSource, writeSource } = require('./core');
 
@@ -203,6 +204,17 @@ function createTunerMiddleware(projectRoot) {
           return json(res, 200, { ok: true });
         });
         return;
+      }
+
+      // The key tables (10.1): one definition in keys.js, served to the
+      // dashboard so panel and browser can never drift apart.
+      if (url.pathname === '/__tuner/ui/keys' && req.method === 'GET') {
+        return json(res, 200, KEYS);
+      }
+
+      if (url.pathname === '/__tuner/ui/undo' && req.method === 'POST') {
+        pushCommand({ type: 'undo' });
+        return json(res, 200, { ok: true });
       }
 
       // Design mode is toggled FROM the dashboard — the app's dev-menu entry

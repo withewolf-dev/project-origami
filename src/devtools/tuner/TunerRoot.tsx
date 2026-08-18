@@ -5,7 +5,7 @@ import { fetchCommands, postHit, postMode, postTree, postWrite } from './devServ
 import { hitTestAtPoint } from './hitTest';
 import { useTunerVersion } from './runtime';
 import { collectTree, filterTunerNodes, findFiberByLoc } from './treeWalker';
-import { clearAll, getOverride, replaceOverride, setOverride } from './store';
+import { clearAll, getOverride, replaceOverride, setOverride, undo } from './store';
 import type { SaveState, TunerHit, TunerMode } from './types';
 import { Overlay } from './ui/Overlay';
 
@@ -196,6 +196,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
             } else if (command.type === 'select') selectFromDashboard(command.loc);
             else if (command.type === 'override') setOverride(command.loc, command.patch);
             else if (command.type === 'save') save(command.loc);
+            else if (command.type === 'undo') undo();
           }
           // Unreachable server returns [] immediately — don't hot-loop on it.
           if (commands.length === 0) await new Promise((r) => setTimeout(r, 250));

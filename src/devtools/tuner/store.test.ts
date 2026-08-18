@@ -1,5 +1,6 @@
 import { resolveStyle } from './runtime';
 import {
+  canUndo,
   clearAll,
   clearOverride,
   getOverride,
@@ -7,11 +8,16 @@ import {
   replaceOverride,
   setOverride,
   subscribe,
+  undo,
 } from './store';
 
 const LOC = 'src/screens/Demo.tsx:12:4';
 
-beforeEach(() => clearAll());
+beforeEach(() => {
+  clearAll();
+  while (canUndo()) undo();
+  clearAll();
+});
 
 describe('override store', () => {
   it('starts empty', () => {
@@ -65,6 +71,54 @@ describe('override store', () => {
     unsubscribe();
   });
 
+});
+
+describe('undo (10.4)', () => {
+  it('reverses a setOverride', () => {
+    setOverride(LOC, { opacity: 0.5 });
+    setOverride(LOC, { opacity: 0.2 });
+    undo();
+    expect(getOverride(LOC)).toEqual({ opacity: 0.5 });
+    undo();
+    expect(getOverride(LOC)).toBeUndefined();
+  });
+
+  it('reverses clearOverride and replaceOverride', () => {
+    setOverride(LOC, { padding: 4 });
+    clearOverride(LOC);
+    expect(getOverride(LOC)).toBeUndefined();
+    undo();
+    expect(getOverride(LOC)).toEqual({ padding: 4 });
+    replaceOverride(LOC, { margin: 2 });
+    undo();
+    expect(getOverride(LOC)).toEqual({ padding: 4 });
+  });
+
+  it('reverses clearAll as ONE step across locs', () => {
+    setOverride(LOC, { padding: 4 });
+    setOverride('src/other.tsx:1:1', { margin: 2 });
+    clearAll();
+    undo();
+    expect(getOverride(LOC)).toEqual({ padding: 4 });
+    expect(getOverride('src/other.tsx:1:1')).toEqual({ margin: 2 });
+  });
+
+  it('is a no-op on an empty stack, and canUndo reports state', () => {
+    expect(canUndo()).toBe(false);
+    undo();
+    expect(getOverride(LOC)).toBeUndefined();
+    setOverride(LOC, { opacity: 1 });
+    expect(canUndo()).toBe(true);
+  });
+
+  it('does not record its own restores (undo twice ≠ redo)', () => {
+    setOverride(LOC, { padding: 1 });
+    setOverride(LOC, { padding: 2 });
+    undo();
+    undo();
+    expect(getOverride(LOC)).toBeUndefined();
+    expect(canUndo()).toBe(false);
+  });
 });
 
 describe('resolveStyle', () => {

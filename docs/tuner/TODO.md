@@ -372,6 +372,34 @@ is written.
   → override → save) works with zero code changes beyond the three wiring
   points. That is the definition of "extracted".
 
+## Phase 10 — Play-feel Tier 1: inspector depth + undo
+
+Goal: nothing in the inspector feels "not wired up yet", and exploration is
+fearless. No new architecture — the writer already handles any literal key;
+this is tables, controls, and an undo stack. Shadows are explicitly OUT
+(shadowOffset is a nested object; the writer serialises scalars only —
+future work, noted here so nobody wonders).
+
+- [x] **10.1 One home for the key tables** `done`
+  `keys.js` (CJS + .d.ts): NUMERIC_KEYS / ENUM_KEYS / COLOR_KEYS / SIZE_KEYS
+  with per-key `appliesTo`. Panel imports it; middleware serves it at
+  `GET /__tuner/ui/keys`; dashboard fetches once at boot. Kills the existing
+  panel/dashboard fork before deepening it.
+- [x] **10.2 Expanded keys** `done`
+  Typography (fontSize, lineHeight, letterSpacing — text only), spacing
+  per-axis (paddingHorizontal/Vertical, marginTop/Bottom), gap, borderWidth,
+  borderColor. Enums: fontWeight, flexDirection, alignItems, justifyContent.
+- [x] **10.3 Enum controls** `done — on-device confirm pending`
+  Phone: chip-group row (EnumRow). Dashboard: button group. String values
+  flow through the existing override → writer path unchanged.
+- [x] **10.4 Undo** `done — 5 store tests; command path curl-verified`
+  Store-level undo stack (grouped inverse snapshots, cap 100), `undo()` +
+  `canUndo()`. Phone: Undo in the footer. Dashboard: Undo button + Cmd+Z,
+  routed as a command so the stack lives in ONE place (the app).
+- [x] **10.5 Exact values in the dashboard** `done`
+  Number input beside each slider (typing + native arrow-key nudge), synced
+  both ways.
+
 ## Later (explicitly out of v1 — do not start without asking)
 
 - Animation param panel (springs on sliders) — needs pixel→hook attribution.
@@ -405,6 +433,15 @@ is written.
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [PHASE 10 BUILT 2026-08-18] keys.js is the one home (13 numeric, 4 enum,
+  3 colour keys + sizes) with per-key appliesTo; Panel imports it, middleware
+  serves it at /__tuner/ui/keys, dashboard fetches at boot — the fork is
+  dead. Undo: grouped inverse snapshots in the store (cap 100, clearAll is
+  one step, undo does not record itself — 5 tests), phone footer button,
+  dashboard button + Cmd/Ctrl+Z via {type:'undo'} command so the stack lives
+  only in the app. Dashboard numeric controls now slider + exact-value
+  number input (native arrow-key nudge). Shadows intentionally absent:
+  shadowOffset is a nested object; writer serialises scalars only.
 - [TRIGGER MOVED TO DASHBOARD 2026-08-18] Dev-menu item removed (user:
   browser is the editing surface). New: POST /__tuner/ui/mode {on} →
   {type:'mode'} command; app reports state via /__tuner/app/mode so the

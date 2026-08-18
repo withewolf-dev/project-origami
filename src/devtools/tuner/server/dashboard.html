@@ -165,6 +165,40 @@
     cursor: pointer;
   }
   #saveBtn:active { opacity: 0.8; }
+  .quiet {
+    margin-top: 10px;
+    margin-left: 8px;
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: var(--mid);
+    font-size: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .numIn {
+    width: 64px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    color: var(--hot);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 3px 6px;
+    text-align: right;
+  }
+  .seg { display: flex; flex-wrap: wrap; gap: 5px; }
+  .segBtn {
+    background: rgba(255,255,255,0.08);
+    border: 0;
+    border-radius: 7px;
+    color: var(--mid);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .segBtn.sel { background: var(--accent); color: #00312A; }
   .hint { margin-top: 10px; font-size: 11px; color: var(--dim); }
   .row { cursor: pointer; }
 </style>
@@ -196,12 +230,11 @@
     }).catch(() => {});
   });
 
-  const NUMERIC = [
-    { key: 'borderRadius', label: 'Radius', min: 0, max: 48, step: 1, fallback: 0 },
-    { key: 'padding', label: 'Padding', min: 0, max: 48, step: 1, fallback: 0 },
-    { key: 'margin', label: 'Margin', min: 0, max: 48, step: 1, fallback: 0 },
-    { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, fallback: 1 },
-  ];
+  // Key tables come from the server (10.1) — ONE definition shared with the
+  // phone panel; the dashboard never hardcodes what is tunable.
+  let KEYS = { NUMERIC_KEYS: [], ENUM_KEYS: [], COLOR_KEYS: [], SIZE_KEYS: [] };
+  fetch('/__tuner/ui/keys').then((r) => r.json()).then((k) => { KEYS = k; });
+
   const SWATCHES = ['#FF3B30','#FF9500','#FFCC00','#34C759','#00C7BE','#0A84FF',
                     '#5856D6','#AF52DE','#FFFFFF','#8E8E93','#3C3C43','#000000'];
 
@@ -259,37 +292,65 @@
     }
     const style = (meta && meta.style) || {};
     const name = (meta && meta.name) || 'element';
-    const isText = /Text/.test(name);
+    const kind = /Text/.test(name) ? 'text' : 'view';
+    const fits = (e) => e.appliesTo === 'any' || e.appliesTo === kind;
 
     let html = `<h2>${displayName(name)}</h2><div class="subloc">${esc(loc)}</div>`;
-    for (const c of NUMERIC) {
+    const numeric = KEYS.NUMERIC_KEYS.filter(fits).concat(
+      KEYS.SIZE_KEYS.filter((e) => typeof style[e.key] === 'number'));
+    for (const c of numeric) {
       const value = typeof style[c.key] === 'number' ? style[c.key] : c.fallback;
       html += `<div class="ctl"><div class="top"><label>${c.label}</label>` +
-        `<span class="num" id="num-${c.key}">${value}</span></div>` +
+        `<input type="number" class="numIn" id="num-${c.key}" data-key="${c.key}"` +
+        ` min="${c.min}" max="${c.max}" step="${c.step}" value="${value}"></div>` +
         `<input type="range" data-key="${c.key}" min="${c.min}" max="${c.max}"` +
         ` step="${c.step}" value="${value}"></div>`;
     }
-    const colorTargets = isText
-      ? [['backgroundColor', 'Background'], ['color', 'Text colour']]
-      : [['backgroundColor', 'Background']];
-    for (const [key, label] of colorTargets) {
-      const current = typeof style[key] === 'string' ? style[key] : '';
-      html += `<div class="ctl"><div class="top"><label>${label}</label>` +
+    for (const e of KEYS.ENUM_KEYS.filter(fits)) {
+      const current = style[e.key] != null ? String(style[e.key]) : '';
+      html += `<div class="ctl"><div class="top"><label>${e.label}</label></div><div class="seg">` +
+        e.options.map((o) =>
+          `<button class="segBtn${o === current ? ' sel' : ''}" data-key="${e.key}"` +
+          ` data-value="${o}">${esc(o.replace('flex-', '').replace('space-', ''))}</button>`,
+        ).join('') + `</div></div>`;
+    }
+    for (const c of KEYS.COLOR_KEYS.filter(fits)) {
+      const current = typeof style[c.key] === 'string' ? style[c.key] : '';
+      html += `<div class="ctl"><div class="top"><label>${c.label}</label>` +
         `<span class="num">${esc(current || '—')}</span></div><div class="swatches">` +
-        SWATCHES.map((c) =>
-          `<button class="swatch" data-key="${key}" data-color="${c}" style="background:${c}"></button>`,
+        SWATCHES.map((s) =>
+          `<button class="swatch" data-key="${c.key}" data-color="${s}" style="background:${s}"></button>`,
         ).join('') +
-        `</div><input class="hex" data-key="${key}" placeholder="#RRGGBB" value="${esc(current)}"></div>`;
+        `</div><input class="hex" data-key="${c.key}" placeholder="#RRGGBB" value="${esc(current)}"></div>`;
     }
     html += `<button id="saveBtn">Save to source</button>` +
+      ` <button id="undoBtn" class="quiet">Undo (⌘Z)</button>` +
       `<div class="hint">Save writes the file — check git diff after.</div>`;
     inspectorEl.innerHTML = html;
 
     inspectorEl.querySelectorAll('input[type="range"]').forEach((input) => {
       input.addEventListener('input', () => {
         const value = parseFloat(input.value);
-        document.getElementById('num-' + input.dataset.key).textContent = value;
+        const box = document.getElementById('num-' + input.dataset.key);
+        if (box) box.value = value;
         sendOverride(loc, input.dataset.key, value);
+      });
+    });
+    inspectorEl.querySelectorAll('.numIn').forEach((input) => {
+      input.addEventListener('input', () => {
+        const value = parseFloat(input.value);
+        if (Number.isNaN(value)) return;
+        const range = inspectorEl.querySelector(
+          `input[type="range"][data-key="${input.dataset.key}"]`);
+        if (range) range.value = value;
+        sendOverride(loc, input.dataset.key, value);
+      });
+    });
+    inspectorEl.querySelectorAll('.segBtn').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.parentElement.querySelectorAll('.segBtn').forEach((b) =>
+          b.classList.toggle('sel', b === button));
+        sendOverride(loc, button.dataset.key, button.dataset.value);
       });
     });
     inspectorEl.querySelectorAll('.swatch').forEach((button) => {
@@ -305,7 +366,19 @@
     document.getElementById('saveBtn').addEventListener('click', () => {
       fetch('/__tuner/ui/save', { method: 'POST', body: JSON.stringify({ loc }) }).catch(() => {});
     });
+    document.getElementById('undoBtn').addEventListener('click', postUndo);
   }
+
+  function postUndo() {
+    fetch('/__tuner/ui/undo', { method: 'POST' }).catch(() => {});
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
+      event.preventDefault();
+      postUndo();
+    }
+  });
 
   let lastPayload = '';
 

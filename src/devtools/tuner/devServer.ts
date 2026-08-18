@@ -65,7 +65,8 @@ export type HubCommand =
   | { type: 'mode'; on: boolean }
   | { type: 'select'; loc: string }
   | { type: 'override'; loc: string; patch: Record<string, unknown> }
-  | { type: 'save'; loc: string };
+  | { type: 'save'; loc: string }
+  | { type: 'undo' };
 
 /** Report design-mode state to the hub, so the dashboard button reflects it. */
 export function postMode(open: boolean): void {

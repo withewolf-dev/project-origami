@@ -1,44 +1,13 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { clearOverride, getOverride, replaceOverride, setOverride } from '../store';
+import { COLOR_KEYS, ENUM_KEYS, NUMERIC_KEYS, SIZE_KEYS } from '../keys';
+import { canUndo, clearOverride, getOverride, replaceOverride, setOverride, undo } from '../store';
 import type { SaveState, TunerHit } from '../types';
 import { ColorRow } from './controls/ColorRow';
+import { EnumRow } from './controls/EnumRow';
 import { ScrubRow } from './controls/ScrubRow';
 import { ACCENT, DANGER, HAIRLINE, MONO, PANEL_BG, TEXT_DIM, TEXT_HOT, TEXT_MID } from './theme';
-
-/**
- * Numeric keys offered for every element (4.1 / 4.2). `fallback` is what an
- * ABSENT key actually renders as — opacity defaults to 1, not 0. Seeding from
- * `min` displayed "Opacity 0.00" on untouched elements and one accidental
- * drag made them vanish.
- */
-const NUMERIC_KEYS = [
-  { key: 'borderRadius', label: 'Radius', min: 0, max: 48, step: 1, precision: 0, fallback: 0 },
-  { key: 'padding', label: 'Padding', min: 0, max: 48, step: 1, precision: 0, fallback: 0 },
-  { key: 'margin', label: 'Margin', min: 0, max: 48, step: 1, precision: 0, fallback: 0 },
-  { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, precision: 2, fallback: 1 },
-] as const;
-
-/**
- * Only offered when the element already has a numeric value for them
- * (`fallback` is never reached — kept for shape-uniformity with NUMERIC_KEYS).
- */
-const SIZE_KEYS = [
-  { key: 'width', label: 'Width', min: 0, max: 420, step: 1, precision: 0, fallback: 0 },
-  { key: 'height', label: 'Height', min: 0, max: 420, step: 1, precision: 0, fallback: 0 },
-] as const;
-
-/**
- * Colour keys with the element kinds they apply to. Key validity is enforced
- * HERE, panel-side: the writer writes whatever it is told, and a `color:` on
- * a View breaks typecheck (found via a real save — see TODO Log). New gated
- * keys get an `appliesTo` entry, not an inline conditional.
- */
-const COLOR_KEYS = [
-  { key: 'backgroundColor', label: 'Background', appliesTo: 'any' },
-  { key: 'color', label: 'Text colour', appliesTo: 'text' },
-] as const;
 
 /** Host element kind, classified from the native view name (e.g. RCTText). */
 function elementKind(hit: TunerHit | null): 'text' | 'view' {
@@ -106,11 +75,15 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
   const isDirty = (key: string) => (override ? key in override : false);
   const dirtyCount = override ? Object.keys(override).length : 0;
 
-  const sizeKeys = SIZE_KEYS.filter((entry) => asNumber(style[entry.key]) !== null);
+  // Key validity lives in the shared tables (keys.js): the writer writes
+  // whatever it is told, so what is OFFERED is the enforcement point.
   const kind = elementKind(hit);
-  const colorKeys = COLOR_KEYS.filter(
-    (entry) => entry.appliesTo === 'any' || entry.appliesTo === kind,
-  );
+  const fits = (entry: { appliesTo: 'any' | 'text' }) =>
+    entry.appliesTo === 'any' || entry.appliesTo === kind;
+  const numericKeys = NUMERIC_KEYS.filter(fits);
+  const sizeKeys = SIZE_KEYS.filter((entry) => asNumber(style[entry.key]) !== null);
+  const enumKeys = ENUM_KEYS.filter(fits);
+  const colorKeys = COLOR_KEYS.filter(fits);
 
   return (
     <View style={[styles.panel, dockTop ? styles.dockTop : styles.dockBottom]}>
@@ -153,7 +126,7 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
       {loc && !collapsed ? (
         <>
           <ScrollView style={{ maxHeight }} keyboardShouldPersistTaps="handled">
-            {[...NUMERIC_KEYS, ...sizeKeys].map((entry) => (
+            {[...numericKeys, ...sizeKeys].map((entry) => (
               <ScrubRow
                 key={entry.key}
                 label={entry.label}
@@ -162,6 +135,20 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
                 max={entry.max}
                 step={entry.step}
                 precision={entry.precision}
+                dirty={isDirty(entry.key)}
+                onChange={(next) => patch({ [entry.key]: next })}
+                onReset={() => resetKey(entry.key)}
+              />
+            ))}
+
+            <View style={styles.sectionGap} />
+
+            {enumKeys.map((entry) => (
+              <EnumRow
+                key={entry.key}
+                label={entry.label}
+                options={entry.options}
+                value={typeof style[entry.key] === 'string' || typeof style[entry.key] === 'number' ? String(style[entry.key]) : null}
                 dirty={isDirty(entry.key)}
                 onChange={(next) => patch({ [entry.key]: next })}
                 onReset={() => resetKey(entry.key)}
@@ -193,6 +180,11 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
           ) : null}
 
           <View style={styles.footer}>
+            <Pressable onPress={undo} disabled={!canUndo()} hitSlop={8}>
+              <Text style={[styles.footerAction, !canUndo() ? styles.footerActionDisabled : null]}>
+                Undo
+              </Text>
+            </Pressable>
             <Pressable onPress={() => clearOverride(loc)} hitSlop={8}>
               <Text style={styles.footerAction}>Revert</Text>
             </Pressable>
@@ -291,6 +283,9 @@ const styles = StyleSheet.create({
     color: TEXT_DIM,
     fontSize: 11,
     fontWeight: '600',
+  },
+  footerActionDisabled: {
+    opacity: 0.35,
   },
   footerSpace: {
     flex: 1,
