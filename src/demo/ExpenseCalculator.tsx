@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     padding: 6,
     gap: 8,
+    width: 202,
   },
   modeChip: {
     flexDirection: 'row',
@@ -243,6 +244,7 @@ const styles = StyleSheet.create({
     padding: 6,
     paddingRight: 16,
     gap: 10,
+    width: 142, height: 43,
   },
   accountLogo: {
     width: 34,
