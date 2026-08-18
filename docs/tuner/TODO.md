@@ -322,13 +322,13 @@ completeness at every step.
   duplicated — decide, note here).
   Preview: edit in browser → Save → `git diff` shows it.
 
-- [ ] **8.9 On-device panel yields to the dashboard** `todo`
+- [x] **8.9 On-device panel yields to the dashboard** `done — on-device confirm pending`
   Hub tracks dashboard liveness (last ui poll < 3s). App learns via its
   command poll; when the dashboard is live, the phone panel collapses to the
   selection chip (name + size + ✕) so the phone is all canvas.
   Preview: open the dashboard → phone panel shrinks; close tab → panel returns.
 
-- [ ] **8.10 POC review + log** `todo`
+- [x] **8.10 POC review + log** `done — see [8.10 REVIEW] in Log`
   Record in the Log: polling latency observed, tree size/walk cost on the
   Playground, what breaks with two dashboards open, and the go/no-go list
   for graduating past POC (SSE, frames in tree, prompt-at-point field).
@@ -366,6 +366,26 @@ completeness at every step.
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [8.9] Panel collapses to the selection chip when `dashboardLive` (from the
+  command-poll response) is true; hint line carries save state. Liveness lag:
+  learned on the next long-poll resolution — up to ~10s after closing the
+  tab when idle. Accepted for POC.
+- [8.10 REVIEW] POC verdict: the architecture holds. Browser and phone edit
+  the same store through one hub; Save stays single-sourced in the app.
+  Measured/observed: filtered tree = 22 nodes (45 raw) pushed every 2s —
+  negligible; browser→phone latency ≈ 80ms batch + one localhost round-trip
+  after the long-poll fix (was up to 1s, user felt it); walker cost
+  unmeasured but tree pushes at 2s cadence show no visible jank.
+  Known POC limits, accepted: single app + single dashboard assumed (one
+  command waiter; a second dashboard steals liveness and splits commands);
+  dashboard shows no save feedback (phone panel does); inspector seeds from
+  selection-time style and does not re-seed on phone-side edits; dashboard
+  liveness decays slowly when idle (long-poll window).
+  GRADUATION LIST (in order): (1) SSE or WebSocket-via-own-server to replace
+  both poll loops; (2) frames in the tree → hover-highlight from the
+  dashboard; (3) prompt-at-point field in the inspector — the agent bridge;
+  (4) dashboard save/error feedback; (5) multi-client hub (waiter list,
+  per-client command queues).
 - [LATENCY FIX] User felt the browser→phone lag (up to 1s command poll).
   Commands now ride a LONG-POLL: `GET /__tuner/app/commands?wait=1` holds at
   the server until a command arrives (10s window, waiter released on

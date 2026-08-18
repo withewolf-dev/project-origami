@@ -53,6 +53,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     const [mode, setMode] = useState<TunerMode>('off');
     const [hit, setHit] = useState<TunerHit | null>(null);
     const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
+    const [dashboardLive, setDashboardLive] = useState(false);
 
     // Subscribe this component to override changes so the panel (which reads
     // the store during render) repaints on every mutation. Stamped app
@@ -199,8 +200,9 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
 
       (async () => {
         while (active) {
-          const commands = await fetchCommands(true);
+          const { commands, dashboardLive: live } = await fetchCommands(true);
           if (!active) break;
+          setDashboardLive(live);
           for (const command of commands) {
             if (command.type === 'select') selectFromDashboard(command.loc);
             else if (command.type === 'override') setOverride(command.loc, command.patch);
@@ -214,6 +216,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       return () => {
         active = false;
         clearInterval(interval);
+        setDashboardLive(false);
         postTree(null); // design mode closed — clear the dashboard
         postHit(null, null, null);
       };
@@ -230,6 +233,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
           mode={mode}
           hit={hit}
           saveState={saveState}
+          dashboardLive={dashboardLive}
           onEnter={enter}
           onExit={exit}
           onSelect={select}

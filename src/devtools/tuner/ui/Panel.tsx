@@ -53,6 +53,8 @@ function displayName(hit: TunerHit): string {
 type Props = {
   hit: TunerHit | null;
   saveState: SaveState;
+  /** Dashboard open (8.9): collapse to the selection chip — phone is canvas. */
+  collapsed: boolean;
   onExit: () => void;
   onResetAll: () => void;
   onSave: (loc: string) => void;
@@ -76,7 +78,7 @@ function asColor(value: unknown): string | null {
  * would sit underneath it. It renders after the overlay's capture layer, so
  * as a later sibling it keeps its own touches and can never select itself.
  */
-export function Panel({ hit, saveState, onExit, onResetAll, onSave }: Props) {
+export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }: Props) {
   const { height: screenHeight } = useWindowDimensions();
   const [expandedColor, setExpandedColor] = useState<string | null>(null);
 
@@ -136,7 +138,19 @@ export function Panel({ hit, saveState, onExit, onResetAll, onSave }: Props) {
         </Pressable>
       </View>
 
-      {loc ? (
+      {loc && collapsed ? (
+        <Text style={styles.collapsedHint}>
+          {saveState.status === 'saving'
+            ? 'Saving…'
+            : saveState.status === 'saved'
+              ? 'Saved ✓'
+              : saveState.status === 'error'
+                ? saveState.message
+                : 'Editing in the dashboard'}
+        </Text>
+      ) : null}
+
+      {loc && !collapsed ? (
         <>
           <ScrollView style={{ maxHeight }} keyboardShouldPersistTaps="handled">
             {[...NUMERIC_KEYS, ...sizeKeys].map((entry) => (
@@ -300,5 +314,10 @@ const styles = StyleSheet.create({
     color: DANGER,
     fontSize: 11,
     paddingVertical: 4,
+  },
+  collapsedHint: {
+    color: TEXT_DIM,
+    fontSize: 11,
+    paddingTop: 8,
   },
 });

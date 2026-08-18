@@ -66,18 +66,27 @@ export type HubCommand =
   | { type: 'override'; loc: string; patch: Record<string, unknown> }
   | { type: 'save'; loc: string };
 
+export type CommandsResult = {
+  commands: HubCommand[];
+  /** True while a dashboard tab is polling the hub (8.9). */
+  dashboardLive: boolean;
+};
+
 /**
  * Drain queued browser commands (8.6/8.7/8.8). With `wait`, the request
  * long-polls: the server holds it until a command arrives (or ~10s), so
- * browser edits reach the app in one round-trip. [] when unreachable.
+ * browser edits reach the app in one round-trip. Empty when unreachable.
  */
-export async function fetchCommands(wait = false): Promise<HubCommand[]> {
+export async function fetchCommands(wait = false): Promise<CommandsResult> {
   try {
     const suffix = wait ? '?wait=1' : '';
     const response = await fetch(`${getDevServerOrigin()}/__tuner/app/commands${suffix}`);
-    const body = (await response.json()) as { commands?: HubCommand[] };
-    return Array.isArray(body.commands) ? body.commands : [];
+    const body = (await response.json()) as { commands?: HubCommand[]; dashboardLive?: boolean };
+    return {
+      commands: Array.isArray(body.commands) ? body.commands : [],
+      dashboardLive: body.dashboardLive === true,
+    };
   } catch {
-    return [];
+    return { commands: [], dashboardLive: false };
   }
 }

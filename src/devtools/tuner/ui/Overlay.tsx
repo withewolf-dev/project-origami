@@ -8,6 +8,8 @@ type Props = {
   mode: TunerMode;
   hit: TunerHit | null;
   saveState: SaveState;
+  /** A dashboard tab is open — the panel yields to it (8.9). */
+  dashboardLive: boolean;
   onEnter: () => void;
   onExit: () => void;
   onSelect: (x: number, y: number) => void;
@@ -27,7 +29,17 @@ type Props = {
  *    the chip, so the chip — a later sibling, therefore on top — keeps its own
  *    touches and the panel can never select itself.
  */
-export function Overlay({ mode, hit, saveState, onEnter, onExit, onSelect, onResetAll, onSave }: Props) {
+export function Overlay({
+  mode,
+  hit,
+  saveState,
+  dashboardLive,
+  onEnter,
+  onExit,
+  onSelect,
+  onResetAll,
+  onSave,
+}: Props) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {mode === 'off' ? (
@@ -69,6 +81,7 @@ export function Overlay({ mode, hit, saveState, onEnter, onExit, onSelect, onRes
           <Panel
             hit={hit}
             saveState={saveState}
+            collapsed={dashboardLive}
             onExit={onExit}
             onResetAll={onResetAll}
             onSave={onSave}
