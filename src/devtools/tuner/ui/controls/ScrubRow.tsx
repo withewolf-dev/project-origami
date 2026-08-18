@@ -17,6 +17,9 @@ type Props = {
   dirty: boolean;
   onChange: (next: number) => void;
   onReset: () => void;
+  /** Set when this shorthand has per-side/per-corner children (10.6). */
+  onToggleChildren?: () => void;
+  childrenExpanded?: boolean;
 };
 
 /**
@@ -37,6 +40,8 @@ export function ScrubRow({
   dirty,
   onChange,
   onReset,
+  onToggleChildren,
+  childrenExpanded,
 }: Props) {
   const rowWidth = useRef(0);
   const grantX = useRef(0);
@@ -74,6 +79,13 @@ export function ScrubRow({
       onResponderMove={move}
       onResponderRelease={() => setScrubbing(false)}
       onResponderTerminate={() => setScrubbing(false)}>
+      {onToggleChildren ? (
+        // A Pressable child claims its own touches, so the chevron never
+        // starts a scrub.
+        <Pressable accessibilityLabel={`${label} per side`} hitSlop={10} onPress={onToggleChildren}>
+          <Text style={styles.chevron}>{childrenExpanded ? '▾' : '▸'}</Text>
+        </Pressable>
+      ) : null}
       <Text style={[styles.label, scrubbing ? styles.labelHot : null]}>{label}</Text>
 
       <Text style={[styles.value, dirty || scrubbing ? styles.valueHot : null]}>
@@ -107,6 +119,11 @@ const styles = StyleSheet.create({
     height: 36,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  chevron: {
+    color: TEXT_DIM,
+    fontSize: 11,
+    marginRight: 6,
   },
   label: {
     flex: 1,

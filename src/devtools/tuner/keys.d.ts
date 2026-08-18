@@ -1,5 +1,10 @@
 export type AppliesTo = 'any' | 'text';
 
+export type NumericChildKey = {
+  key: string;
+  label: string;
+};
+
 export type NumericKey = {
   key: string;
   label: string;
@@ -9,6 +14,10 @@ export type NumericKey = {
   precision: number;
   fallback: number;
   appliesTo: AppliesTo;
+  /** Shown after the disclosure toggle, e.g. "per corner". */
+  childrenLabel?: string;
+  /** Longhand keys behind the shorthand; inherit the parent's range. */
+  children?: readonly NumericChildKey[];
 };
 
 export type EnumKey = {

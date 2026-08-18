@@ -50,6 +50,15 @@ function asColor(value: unknown): string | null {
 export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }: Props) {
   const { height: screenHeight } = useWindowDimensions();
   const [expandedColor, setExpandedColor] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleGroup = (key: string) =>
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const loc = hit?.loc ?? null;
   const override = loc ? getOverride(loc) : undefined;
@@ -126,20 +135,46 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
       {loc && !collapsed ? (
         <>
           <ScrollView style={{ maxHeight }} keyboardShouldPersistTaps="handled">
-            {[...numericKeys, ...sizeKeys].map((entry) => (
-              <ScrubRow
-                key={entry.key}
-                label={entry.label}
-                value={asNumber(style[entry.key]) ?? entry.fallback}
-                min={entry.min}
-                max={entry.max}
-                step={entry.step}
-                precision={entry.precision}
-                dirty={isDirty(entry.key)}
-                onChange={(next) => patch({ [entry.key]: next })}
-                onReset={() => resetKey(entry.key)}
-              />
-            ))}
+            {[...numericKeys, ...sizeKeys].map((entry) => {
+              const parentValue = asNumber(style[entry.key]) ?? entry.fallback;
+              const open = entry.children ? expandedGroups.has(entry.key) : false;
+              return (
+                <View key={entry.key}>
+                  <ScrubRow
+                    label={entry.label}
+                    value={parentValue}
+                    min={entry.min}
+                    max={entry.max}
+                    step={entry.step}
+                    precision={entry.precision}
+                    dirty={isDirty(entry.key)}
+                    onChange={(next) => patch({ [entry.key]: next })}
+                    onReset={() => resetKey(entry.key)}
+                    onToggleChildren={entry.children ? () => toggleGroup(entry.key) : undefined}
+                    childrenExpanded={open}
+                  />
+                  {open
+                    ? entry.children?.map((child) => (
+                        <View key={child.key} style={styles.subRow}>
+                          <ScrubRow
+                            label={child.label}
+                            // RN precedence: the specific side falls back to
+                            // the shorthand's rendered value.
+                            value={asNumber(style[child.key]) ?? parentValue}
+                            min={entry.min}
+                            max={entry.max}
+                            step={entry.step}
+                            precision={entry.precision}
+                            dirty={isDirty(child.key)}
+                            onChange={(next) => patch({ [child.key]: next })}
+                            onReset={() => resetKey(child.key)}
+                          />
+                        </View>
+                      ))
+                    : null}
+                </View>
+              );
+            })}
 
             <View style={styles.sectionGap} />
 
@@ -269,6 +304,9 @@ const styles = StyleSheet.create({
   },
   sectionGap: {
     height: 10,
+  },
+  subRow: {
+    paddingLeft: 16,
   },
   footer: {
     flexDirection: 'row',

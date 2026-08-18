@@ -397,6 +397,16 @@ future work, noted here so nobody wonders).
   `canUndo()`. Phone: Undo in the footer. Dashboard: Undo button + Cmd+Z,
   routed as a command so the stack lives in ONE place (the app).
 - [x] **10.5 Exact values in the dashboard** `done`
+- [x] **10.6 Per-side / per-corner longhands** `done`
+  Shorthand rows grow a disclosure: radius → 4 corners, padding/margin/
+  borderWidth → 4 sides (margin range now −64..64). Children live in the
+  shared tables (`children` on NumericKey, ranges inherited), phone renders
+  indented ScrubRows behind a chevron, dashboard renders a bordered
+  sub-group behind "▸ per corner/side". Child values fall back to the
+  shorthand's rendered value (RN precedence). Pad X/Y and the top-level
+  marginTop/Bottom rows were replaced by the groups. Known gap, accepted:
+  the shorthand row shows the shorthand value even when sides diverge — no
+  "mixed" indicator in v1.
   Number input beside each slider (typing + native arrow-key nudge), synced
   both ways.
 

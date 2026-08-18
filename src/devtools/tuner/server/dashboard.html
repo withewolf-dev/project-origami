@@ -187,6 +187,16 @@
     padding: 3px 6px;
     text-align: right;
   }
+  .expBtn {
+    background: transparent;
+    border: 0;
+    color: var(--dim);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0 0 8px;
+  }
+  .ctl.sub { margin-left: 16px; margin-bottom: 10px; }
+  .subGroup { border-left: 1px solid var(--hairline); margin: 0 0 6px 4px; padding-left: 8px; }
   .seg { display: flex; flex-wrap: wrap; gap: 5px; }
   .segBtn {
     background: rgba(255,255,255,0.08);
@@ -298,13 +308,24 @@
     let html = `<h2>${displayName(name)}</h2><div class="subloc">${esc(loc)}</div>`;
     const numeric = KEYS.NUMERIC_KEYS.filter(fits).concat(
       KEYS.SIZE_KEYS.filter((e) => typeof style[e.key] === 'number'));
+    const numericRow = (c, value, sub) =>
+      `<div class="ctl${sub ? ' sub' : ''}"><div class="top"><label>${c.label}</label>` +
+      `<input type="number" class="numIn" id="num-${c.key}" data-key="${c.key}"` +
+      ` min="${c.min}" max="${c.max}" step="${c.step}" value="${value}"></div>` +
+      `<input type="range" data-key="${c.key}" min="${c.min}" max="${c.max}"` +
+      ` step="${c.step}" value="${value}"></div>`;
+
     for (const c of numeric) {
       const value = typeof style[c.key] === 'number' ? style[c.key] : c.fallback;
-      html += `<div class="ctl"><div class="top"><label>${c.label}</label>` +
-        `<input type="number" class="numIn" id="num-${c.key}" data-key="${c.key}"` +
-        ` min="${c.min}" max="${c.max}" step="${c.step}" value="${value}"></div>` +
-        `<input type="range" data-key="${c.key}" min="${c.min}" max="${c.max}"` +
-        ` step="${c.step}" value="${value}"></div>`;
+      html += numericRow(c, value, false);
+      if (c.children) {
+        html += `<button class="expBtn" data-exp="${c.key}">▸ ${c.childrenLabel || 'per side'}</button>` +
+          `<div class="subGroup" id="exp-${c.key}" style="display:none">` +
+          c.children.map((child) => {
+            const childValue = typeof style[child.key] === 'number' ? style[child.key] : value;
+            return numericRow({ ...c, key: child.key, label: child.label }, childValue, true);
+          }).join('') + `</div>`;
+      }
     }
     for (const e of KEYS.ENUM_KEYS.filter(fits)) {
       const current = style[e.key] != null ? String(style[e.key]) : '';
@@ -361,6 +382,14 @@
       input.addEventListener('change', () => {
         if (/^#[0-9a-fA-F]{3,8}$/.test(input.value.trim()))
           sendOverride(loc, input.dataset.key, input.value.trim());
+      });
+    });
+    inspectorEl.querySelectorAll('.expBtn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const group = document.getElementById('exp-' + button.dataset.exp);
+        const open = group.style.display !== 'none';
+        group.style.display = open ? 'none' : 'block';
+        button.textContent = (open ? '▸ ' : '▾ ') + button.textContent.slice(2);
       });
     });
     document.getElementById('saveBtn').addEventListener('click', () => {

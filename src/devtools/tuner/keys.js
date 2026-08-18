@@ -12,16 +12,55 @@
  * Shadows are deliberately absent: shadowOffset is a nested object and the
  * source writer serialises scalars only.
  */
+/**
+ * `children`: the per-side/per-corner longhand keys behind a shorthand row.
+ * Children inherit min/max/step/precision from the parent; a child's current
+ * value falls back to the parent's rendered value (RN precedence: specific
+ * beats shorthand). Both surfaces render them behind a disclosure so the
+ * default view stays a strip, not a wall.
+ */
 const NUMERIC_KEYS = [
-  { key: 'borderRadius', label: 'Radius', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'padding', label: 'Padding', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'paddingHorizontal', label: 'Pad X', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'paddingVertical', label: 'Pad Y', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'margin', label: 'Margin', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'marginTop', label: 'Margin top', min: 0, max: 64, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'marginBottom', label: 'Margin btm', min: 0, max: 64, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
+  {
+    key: 'borderRadius', label: 'Radius', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
+    childrenLabel: 'per corner',
+    children: [
+      { key: 'borderTopLeftRadius', label: 'Top left' },
+      { key: 'borderTopRightRadius', label: 'Top right' },
+      { key: 'borderBottomLeftRadius', label: 'Btm left' },
+      { key: 'borderBottomRightRadius', label: 'Btm right' },
+    ],
+  },
+  {
+    key: 'padding', label: 'Padding', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
+    childrenLabel: 'per side',
+    children: [
+      { key: 'paddingTop', label: 'Top' },
+      { key: 'paddingRight', label: 'Right' },
+      { key: 'paddingBottom', label: 'Bottom' },
+      { key: 'paddingLeft', label: 'Left' },
+    ],
+  },
+  {
+    key: 'margin', label: 'Margin', min: -64, max: 64, step: 1, precision: 0, fallback: 0, appliesTo: 'any',
+    childrenLabel: 'per side',
+    children: [
+      { key: 'marginTop', label: 'Top' },
+      { key: 'marginRight', label: 'Right' },
+      { key: 'marginBottom', label: 'Bottom' },
+      { key: 'marginLeft', label: 'Left' },
+    ],
+  },
   { key: 'gap', label: 'Gap', min: 0, max: 48, step: 1, precision: 0, fallback: 0, appliesTo: 'any' },
-  { key: 'borderWidth', label: 'Border', min: 0, max: 8, step: 0.5, precision: 1, fallback: 0, appliesTo: 'any' },
+  {
+    key: 'borderWidth', label: 'Border', min: 0, max: 8, step: 0.5, precision: 1, fallback: 0, appliesTo: 'any',
+    childrenLabel: 'per side',
+    children: [
+      { key: 'borderTopWidth', label: 'Top' },
+      { key: 'borderRightWidth', label: 'Right' },
+      { key: 'borderBottomWidth', label: 'Bottom' },
+      { key: 'borderLeftWidth', label: 'Left' },
+    ],
+  },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, precision: 2, fallback: 1, appliesTo: 'any' },
   { key: 'fontSize', label: 'Font size', min: 8, max: 80, step: 1, precision: 0, fallback: 14, appliesTo: 'text' },
   { key: 'lineHeight', label: 'Line height', min: 0, max: 96, step: 1, precision: 0, fallback: 0, appliesTo: 'text' },
