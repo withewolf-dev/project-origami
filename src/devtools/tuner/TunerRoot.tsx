@@ -88,7 +88,6 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
 
     const designOpen = mode !== 'off';
 
-    const enter = useCallback(() => setMode('selecting'), []);
     const exit = useCallback(() => {
       setMode('off');
       setHit(null);
@@ -234,7 +233,6 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
           hit={hit}
           saveState={saveState}
           dashboardLive={dashboardLive}
-          onEnter={enter}
           onExit={exit}
           onSelect={select}
           onResetAll={clearAll}

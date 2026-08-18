@@ -110,7 +110,7 @@ Key facts verified against this repo:
   Verify: app interaction is 100% normal with overlay mounted (tap through
   every Playground element).
 
-- [x] **2.2 Triggers** `done — dev-menu item confirmed on device; corner long-press still unconfirmed`
+- [x] **2.2 Triggers** `done — dev-menu item confirmed; corner long-press DROPPED 2026-08-18 (user: unneeded; invisible touch targets are mystery bugs). Dev menu is the single trigger; Overlay now renders null in off mode.`
   (a) `DevSettings.addMenuItem('Design Mode', toggle)`;
   (b) invisible 44pt bottom-left corner view, 500ms long-press toggles mode.
   Verify: both paths flip mode; a thin colored border appears around the
