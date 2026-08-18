@@ -611,10 +611,38 @@
     const specs = {};
     for (const c of numeric) specs[c.key] = c;
 
+    // A stroke with no colour is invisible (RN defaults borderColor to
+    // black): the first border-width edit on an element without a border
+    // colour also sets a visible one — Figma's add-a-stroke behaviour.
+    let borderColorSet = typeof style.borderColor === 'string';
+    const ensureBorderColor = (key) => {
+      if (borderColorSet || !/^border.*Width$/.test(key)) return;
+      borderColorSet = true;
+      const hex = inspectorEl.querySelector('.hexIn[data-key="borderColor"]');
+      const chip = inspectorEl.querySelector('.chip[data-pop="borderColor"]');
+      if (hex) hex.value = '#8E8E93';
+      if (chip) chip.style.background = '#8E8E93';
+      sendOverride(loc, 'borderColor', '#8E8E93');
+    };
+
     inspectorEl.querySelectorAll('.numIn').forEach((input) => {
       input.addEventListener('input', () => {
-        const value = parseFloat(input.value);
-        if (!Number.isNaN(value)) sendOverride(loc, input.dataset.key, value);
+        let value = parseFloat(input.value);
+        if (Number.isNaN(value)) return;
+        // Typed values must honour the range too — arrows already do.
+        const spec = specs[input.dataset.spec];
+        if (spec) value = Math.min(spec.max, Math.max(spec.min, value));
+        input.dataset.last = String(value);
+        ensureBorderColor(input.dataset.key);
+        sendOverride(loc, input.dataset.key, value);
+      });
+      // An emptied or junk field snaps back to the last applied value.
+      input.addEventListener('blur', () => {
+        if (Number.isNaN(parseFloat(input.value))) {
+          input.value = input.dataset.last ?? input.defaultValue;
+        } else if (input.dataset.last) {
+          input.value = input.dataset.last;
+        }
       });
     });
     inspectorEl.querySelectorAll('[data-scrub]').forEach((labelEl) => {

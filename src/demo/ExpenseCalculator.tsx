@@ -233,6 +233,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     marginTop: 18,
+    marginBottom: 4,
   },
   accountPill: {
     flexDirection: 'row',
@@ -289,7 +290,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
-    borderRadius: 6, backgroundColor: '#171616', borderTopLeftRadius: 40, borderTopRightRadius: 40,
+    borderRadius: 6, backgroundColor: '#0F0F0F', borderTopLeftRadius: 40, borderTopRightRadius: 40,
   },
   expressionPill: {
     backgroundColor: '#1C1C1E',
@@ -327,7 +328,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 12,
-    marginBottom: 14,
+    marginBottom: 0,
+    marginTop: 10,
+    justifyContent: 'center',
   },
   todayPill: {
     flexDirection: 'row',

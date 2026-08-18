@@ -70,7 +70,14 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
   const dockTop = hit ? hit.frame.top + hit.frame.height > screenHeight - maxHeight - 64 : false;
 
   const patch = (next: Record<string, unknown>) => {
-    if (loc) setOverride(loc, next);
+    if (!loc) return;
+    // A stroke with no colour is invisible (RN defaults borderColor to
+    // black): the first border-width edit also sets a visible colour.
+    const touchesBorderWidth = Object.keys(next).some((key) => /^border.*Width$/.test(key));
+    if (touchesBorderWidth && style.borderColor == null) {
+      next = { ...next, borderColor: '#8E8E93' };
+    }
+    setOverride(loc, next);
   };
 
   /** Drop one key from the override, leaving the rest pending. */

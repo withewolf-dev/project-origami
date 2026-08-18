@@ -443,6 +443,15 @@ future work, noted here so nobody wonders).
   `hook.getFiberRoots` defensively (returns [] when absent — the log line in
   TunerRoot will show 0 if RN's hook lacks it, which is the diagnostic).
   9 unit tests, 87 repo total.
+- [BORDER UX 2026-08-19] User confusion report unpacked three issues:
+  (1) Border "Width" edits were invisible — RN defaults borderColor to
+  BLACK, so strokes on dark surfaces render unseen while still squeezing
+  content (RN borders draw inside the box). Fix: first border-width edit on
+  an element without a borderColor also sets #8E8E93 (Figma's
+  add-a-stroke behaviour), on both surfaces. (2) Typed values bypassed
+  min/max (user had borderWidth 20, max 8) — dashboard now clamps typed
+  input to the spec range. (3) An emptied number field stayed blank —
+  blur now snaps back to the last applied value.
 - [UNSAVED-STATE FIX 2026-08-19] User: "changes are saved even without
   Save". Audit: only two real write triggers exist (phone Save, dashboard
   Save→command); the observation was overrides LINGERING after exiting
