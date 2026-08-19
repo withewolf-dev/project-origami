@@ -14,6 +14,12 @@ type Props = {
   onClose: () => void;
 };
 
+/**
+ * Content is hidden while the gradient is being tuned in isolation — flip to
+ * `true` to bring the whole screen back. Everything below is untouched.
+ */
+const SHOW_CONTENT = false;
+
 const GRADIENT = [
   '#4470FF', '#3A63FA', '#2F55F2', '#2447E8',
   '#1B3ADB', '#142FCC', '#0E25B8', '#0A1D9E',
@@ -45,6 +51,13 @@ export function RevolutHome({ onClose }: Props) {
         ))}
       </View>
 
+      {!SHOW_CONTENT ? (
+        <Pressable style={styles.isolatedClose} onPress={onClose}>
+          <Text style={styles.isolatedCloseGlyph}>✕</Text>
+        </Pressable>
+      ) : null}
+
+      {SHOW_CONTENT ? (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <Pressable style={styles.avatar} onPress={onClose}>
@@ -126,7 +139,9 @@ export function RevolutHome({ onClose }: Props) {
           <Text style={styles.productsLabel}>Products for you ›</Text>
         </View>
       </ScrollView>
+      ) : null}
 
+      {SHOW_CONTENT ? (
       <View style={styles.tabBar}>
         {TABS.map((tab, index) => (
           <View key={tab.label} style={styles.tab}>
@@ -139,6 +154,7 @@ export function RevolutHome({ onClose }: Props) {
           </View>
         ))}
       </View>
+      ) : null}
     </View>
   );
 }
@@ -153,10 +169,26 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    height: 620,
+    bottom: 0,
   },
   band: {
     flex: 1,
+  },
+  isolatedClose: {
+    position: 'absolute',
+    right: 16,
+    top: 60,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  isolatedCloseGlyph: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
   },
   scroll: {
     paddingTop: 60,
