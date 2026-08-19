@@ -17,8 +17,8 @@ export type MotionInfo = {
   spec: Record<string, number>;
   /** Live values (defaults merged with any pending override). */
   values: Record<string, number>;
-  /** Optional per-key {min,max,step}; inferred from the default otherwise. */
-  ranges?: Record<string, { min: number; max: number; step: number }>;
+  /** Optional per-key range + human label; inferred from the default otherwise. */
+  ranges?: Record<string, { min: number; max: number; step: number; label?: string }>;
 };
 
 /** Save button lifecycle (docs/tuner/TODO.md, 6.1/6.3). */

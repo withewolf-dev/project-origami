@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
-import { liveMotion, registerMotion } from '../devtools/tuner/motion';
+import { liveMotion, registerMotion, registerMotionReplay } from '../devtools/tuner/motion';
 
 /** Enough slots for any amount this screen shows; index maps to character. */
 const POOL = 16;
@@ -15,21 +15,21 @@ const MOTION_ID = 'src/demo/CascadingAmount.tsx';
  * and "faster".
  */
 export const MOTION = {
-  stagger: 35,
-  damping: 14,
-  stiffness: 180,
+  stagger: 6,
+  damping: 22,
+  stiffness: 30,
   mass: 1,
-  rise: 22,
+  rise: 10,
   startScale: 0.86,
 };
 
 registerMotion(MOTION_ID, 'MOTION', MOTION, {
-  stagger: { min: 0, max: 160, step: 1 },
-  damping: { min: 1, max: 40, step: 0.5 },
-  stiffness: { min: 20, max: 500, step: 5 },
-  mass: { min: 0.2, max: 4, step: 0.05 },
-  rise: { min: 0, max: 80, step: 1 },
-  startScale: { min: 0.2, max: 1, step: 0.02 },
+  stagger: { min: 0, max: 160, step: 1, label: 'Stagger (ms)' },
+  damping: { min: 1, max: 40, step: 0.5, label: 'Damping · lower = bouncier' },
+  stiffness: { min: 20, max: 500, step: 5, label: 'Stiffness · higher = faster' },
+  mass: { min: 0.2, max: 4, step: 0.05, label: 'Mass · higher = heavier' },
+  rise: { min: 0, max: 80, step: 1, label: 'Rise (px)' },
+  startScale: { min: 0.2, max: 1, step: 0.02, label: 'Start scale' },
 });
 
 type Props = {
@@ -56,6 +56,31 @@ export function CascadingAmount({ symbol, value }: Props) {
   const [anims] = useState(() => Array.from({ length: POOL }, () => new Animated.Value(1)));
   const previous = useRef(value);
   const motion = liveMotion(MOTION_ID, MOTION);
+
+  // Replay registration: how this component demos itself. The tuner calls it
+  // automatically (debounced) whenever a motion value changes, and from the
+  // Replay buttons — every glyph re-cascades so the new feel is visible
+  // without touching the keypad.
+  useEffect(() => {
+    return registerMotionReplay(MOTION_ID, () => {
+      const feel = liveMotion(MOTION_ID, MOTION);
+      const steps = [];
+      const length = Math.min(previous.current.length, POOL);
+      for (let i = 0; i < length; i++) {
+        anims[i].setValue(0);
+        steps.push(
+          Animated.spring(anims[i], {
+            toValue: 1,
+            damping: feel.damping,
+            stiffness: feel.stiffness,
+            mass: feel.mass,
+            useNativeDriver: true,
+          }),
+        );
+      }
+      Animated.stagger(feel.stagger, steps).start();
+    });
+  }, [anims]);
 
   // `motion` is intentionally NOT a dependency: retuning mid-flight should
   // not replay the cascade — the next value change picks up the new feel.

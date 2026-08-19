@@ -81,6 +81,7 @@ export type HubCommand =
   | { type: 'select'; loc: string }
   | { type: 'override'; loc: string; patch: Record<string, unknown> }
   | { type: 'save'; loc: string }
+  | { type: 'replay'; id: string }
   | { type: 'undo' };
 
 /** Report design-mode state to the hub, so the dashboard button reflects it. */

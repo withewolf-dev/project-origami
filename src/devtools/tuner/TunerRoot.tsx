@@ -4,7 +4,7 @@ import { Dimensions, StyleSheet, View } from 'react-native';
 import { fetchCommands, postHit, postMode, postTree, postWrite, postWriteConst } from './devServer';
 import { hitTestAtPoint } from './hitTest';
 import { useTunerVersion } from './runtime';
-import { motionForLoc, motionKey } from './motion';
+import { motionForLoc, motionKey, replayMotion } from './motion';
 import { collectTree, filterTunerNodes, findAllFibersByLoc, findFiberByLoc } from './treeWalker';
 import { clearAll, getOverride, replaceOverride, setOverride, undo } from './store';
 import type { SaveState, TunerFrame, TunerHit, TunerMode } from './types';
@@ -251,6 +251,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
             } else if (command.type === 'select') selectFromDashboard(command.loc);
             else if (command.type === 'override') setOverride(command.loc, command.patch);
             else if (command.type === 'save') save(command.loc);
+            else if (command.type === 'replay') replayMotion(command.id);
             else if (command.type === 'undo') undo();
           }
           // Unreachable server returns [] immediately — don't hot-loop on it.

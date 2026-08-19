@@ -216,6 +216,15 @@ function createTunerMiddleware(projectRoot) {
         return json(res, 200, KEYS);
       }
 
+      if (url.pathname === '/__tuner/ui/replay' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || typeof body.id !== 'string') return json(res, 400, { error: 'bad-replay' });
+          pushCommand({ type: 'replay', id: body.id });
+          return json(res, 200, { ok: true });
+        });
+        return;
+      }
+
       if (url.pathname === '/__tuner/ui/undo' && req.method === 'POST') {
         pushCommand({ type: 'undo' });
         return json(res, 200, { ok: true });

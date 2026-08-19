@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { COLOR_KEYS, ENUM_KEYS, NUMERIC_KEYS, SIZE_KEYS } from '../keys';
-import { motionKey } from '../motion';
+import { motionKey, replayMotion } from '../motion';
 import { canUndo, clearOverride, getOverride, replaceOverride, setOverride, undo } from '../store';
 import type { SaveState, TunerHit } from '../types';
 import { ColorRow } from './controls/ColorRow';
@@ -230,13 +230,18 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
             {motion ? (
               <>
                 <View style={styles.sectionGap} />
-                <Text style={styles.sectionLabel}>Motion · {motion.name}</Text>
+                <View style={styles.motionHeader}>
+                  <Text style={styles.sectionLabel}>Motion · {motion.name}</Text>
+                  <Pressable hitSlop={8} onPress={() => replayMotion(motion.id)}>
+                    <Text style={styles.replayLabel}>▶ Replay</Text>
+                  </Pressable>
+                </View>
                 {Object.entries(motion.values).map(([key, value]) => {
                   const range = motionRange(key, motion.spec[key] ?? value);
                   return (
                     <ScrubRow
                       key={key}
-                      label={key}
+                      label={motion.ranges?.[key]?.label ?? key}
                       value={value}
                       min={range.min}
                       max={range.max}
@@ -364,6 +369,16 @@ const styles = StyleSheet.create({
   },
   sectionGap: {
     height: 10,
+  },
+  motionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  replayLabel: {
+    color: ACCENT,
+    fontSize: 11,
+    fontWeight: '700',
   },
   sectionLabel: {
     color: TEXT_DIM,
