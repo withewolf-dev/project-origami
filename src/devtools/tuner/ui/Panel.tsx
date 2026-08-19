@@ -144,6 +144,9 @@ export function Panel({ hit, saveState, collapsed, onExit, onResetAll, onSave }:
               </Text>
               <Text style={styles.subtitle} numberOfLines={1}>
                 {loc ? loc.split('/').pop() : 'no source stamp — not editable'}
+                {hit.depth && hit.depth.total > 1
+                  ? `   ·   layer ${hit.depth.index + 1}/${hit.depth.total} — tap again for the one behind`
+                  : ''}
               </Text>
             </>
           ) : (

@@ -54,6 +54,12 @@ export type TunerHit = {
   /** Tunable motion registered for this element's file (Motion section). */
   motion?: MotionInfo | null;
   /**
+   * Position in the stack of elements under the tap point — tapping the same
+   * spot again advances outward. `{ index: 0, total: 5 }` means the innermost
+   * of five candidates.
+   */
+  depth?: { index: number; total: number };
+  /**
    * The element's flattened style as currently rendered, INCLUDING any pending
    * override. Controls seed from this so a slider starts at the real value
    * instead of zero. Null when the element has no style.

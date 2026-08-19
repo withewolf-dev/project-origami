@@ -149,7 +149,13 @@ function collectStamped(fiber: FiberLike | null | undefined, out: StampedFiber[]
   while (node) {
     const loc = node.memoizedProps?.__tunerLoc;
     const measurable = (node as MeasurableFiber).stateNode?.measureInWindow;
-    if (typeof loc === 'string' && typeof measurable === 'function') {
+    // Same exclusion as the dashboard tree: the tuner's own root wrappers are
+    // stamped and screen-sized, and cycling must never walk into them.
+    const isTunerUi =
+      typeof loc === 'string' &&
+      loc.startsWith(TUNER_UI_PREFIX) &&
+      !loc.startsWith(PLAYGROUND_PREFIX);
+    if (typeof loc === 'string' && !isTunerUi && typeof measurable === 'function') {
       out.push({
         loc,
         name: typeof node.type === 'string' ? node.type : 'node',
