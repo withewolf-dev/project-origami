@@ -2,11 +2,10 @@ import { type ComponentType, useCallback, useEffect, useRef, useState } from 're
 import { Dimensions, StyleSheet, View } from 'react-native';
 
 import { fetchCommands, postHit, postMode, postTree, postWrite, postWriteConst } from './devServer';
-import { sanitizeStyle } from './hitTest';
+import { hitTestAtPoint, sanitizeStyle } from './hitTest';
 import { useTunerVersion } from './runtime';
 import { motionForLoc, motionKey, replayMotion } from './motion';
 import {
-  type StampedFiber,
   collectStampedFibers,
   collectTree,
   filterTunerNodes,
@@ -22,6 +21,20 @@ const FAST_REFRESH_GRACE_MS = 1400;
 
 function describeFailures(failed: { key: string; reason: string }[]): string {
   return failed.map((f) => `${f.key}: ${f.reason}`).join(' · ');
+}
+
+/**
+ * Selection policy: a hit covering most of the display is the screen-sized
+ * container (tapping empty space resolves to the ScrollView) — nobody means
+ * to select that, so it reads as "dismiss". Named here so EVERY hit-test
+ * call site applies the same rule; the frame/window comparison is valid
+ * because the tuner root fills the window.
+ */
+function asSelectable(hit: TunerHit | null): TunerHit | null {
+  if (!hit) return null;
+  const window = Dimensions.get('window');
+  const huge = hit.frame.width * hit.frame.height > window.width * window.height * 0.7;
+  return huge ? null : hit;
 }
 
 /**
@@ -43,8 +56,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     // also contains the overlay always resolves to the overlay's own
     // full-screen capture layer, which sits on top of everything.
     const appRef = useRef<View>(null);
-    /** Repeated taps at ~the same point walk outward through the stack. */
-    const cycleRef = useRef<{ x: number; y: number; index: number } | null>(null);
+    const lastTapRef = useRef<{ x: number; y: number } | null>(null);
     const [mode, setMode] = useState<TunerMode>('off');
     const [hit, setHit] = useState<TunerHit | null>(null);
     const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
@@ -124,9 +136,11 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     }, []);
 
     /**
-     * Select an element by loc on the dashboard's behalf (8.6) — a click on a
-     * named row is unambiguous, so it selects exactly that element with no
-     * candidate-stack cycling.
+     * Select an element by loc on the dashboard's behalf (8.6). Unlike a tap,
+     * a click on a NAMED row is unambiguous, so the tap-away dismiss policy
+     * (asSelectable) deliberately does not apply — this is how the screen
+     * container becomes selectable again, from the one surface where
+     * selecting it is clearly intentional.
      */
     const selectFromDashboard = useCallback((loc: string) => {
       const fiber = findFiberByLoc(loc);
@@ -151,29 +165,41 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
 
 
     /**
-     * Geometric hit-test over the measured tree, returning EVERY stamped
-     * element containing the point, innermost (smallest) first.
-     *
-     * This replaces native hit-testing for selection because native
-     * hit-testing skips `pointerEvents="none"` views — gradient backdrops and
-     * decorative layers were simply unreachable by tap. Geometry does not
-     * care about touch, so everything drawn is selectable.
+     * Geometric hit-test: measure every stamped element and take the SMALLEST
+     * one containing the point. Used when native hit-testing finds nothing —
+     * which is the case for any `pointerEvents="none"` view (gradient
+     * backdrops, decorative layers), since native hit-testing skips them
+     * entirely. Screen-sized containers stay excluded, so this never
+     * resolves to "the whole screen".
      */
-    const candidatesAt = useCallback(
-      (x: number, y: number, done: (candidates: { frame: TunerFrame; entry: StampedFiber }[]) => void) => {
+    const selectByGeometry = useCallback(
+      (x: number, y: number) => {
         const stamped = collectStampedFibers();
-        if (stamped.length === 0) {
-          done([]);
-          return;
-        }
-        const found: { area: number; frame: TunerFrame; entry: StampedFiber }[] = [];
+        if (stamped.length === 0) return;
+        const window = Dimensions.get('window');
+        const maxArea = window.width * window.height * 0.7;
+
         let settled = 0;
+        let best: { area: number; frame: TunerFrame; entry: (typeof stamped)[number] } | null = null;
+
         const finish = () => {
           settled += 1;
-          if (settled < stamped.length) return;
-          found.sort((a, b) => a.area - b.area);
-          done(found.map(({ frame, entry }) => ({ frame, entry })));
+          if (settled < stamped.length || !best) return;
+          const { entry, frame } = best;
+          let style: Record<string, unknown> | null = null;
+          try {
+            style = sanitizeStyle(StyleSheet.flatten(entry.fiber.memoizedProps?.style as never));
+          } catch {
+            style = null;
+          }
+          const motion = motionForLoc(entry.loc);
+          setHit({ frame, loc: entry.loc, name: entry.name, hierarchy: [], style, motion });
+          setMode('editing');
+          setSaveState({ status: 'idle' });
+          postHit(entry.loc, entry.name, style, motion);
+          measureInstances(entry.loc);
         };
+
         for (const entry of stamped) {
           const measure = entry.fiber.stateNode?.measureInWindow;
           if (typeof measure !== 'function') {
@@ -182,77 +208,33 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
           }
           measure((mx, my, width, height) => {
             const area = width * height;
-            if (area > 0 && x >= mx && x <= mx + width && y >= my && y <= my + height) {
-              found.push({ area, frame: { left: mx, top: my, width, height }, entry });
+            const contains = x >= mx && x <= mx + width && y >= my && y <= my + height;
+            if (contains && area > 0 && area <= maxArea && (!best || area < best.area)) {
+              best = { area, frame: { left: mx, top: my, width, height }, entry };
             }
             finish();
           });
         }
       },
-      [],
-    );
-
-    /** Commit one candidate as the selection. */
-    const commitCandidate = useCallback(
-      (frame: TunerFrame, entry: StampedFiber, depth: { index: number; total: number }) => {
-        let style: Record<string, unknown> | null = null;
-        try {
-          style = sanitizeStyle(StyleSheet.flatten(entry.fiber.memoizedProps?.style as never));
-        } catch {
-          style = null;
-        }
-        const motion = motionForLoc(entry.loc);
-        setHit({ frame, loc: entry.loc, name: entry.name, hierarchy: [], style, motion, depth });
-        setMode('editing');
-        setSaveState({ status: 'idle' });
-        postHit(entry.loc, entry.name, style, motion);
-        measureInstances(entry.loc);
-      },
       [measureInstances],
     );
 
-    const select = useCallback(
-      (x: number, y: number) => {
-        // Tapping the same spot again steps OUTWARD: innermost element first,
-        // then its containers — how you reach a background sitting under
-        // everything else.
-        const previous = cycleRef.current;
-        const sameSpot =
-          previous && Math.abs(previous.x - x) < 12 && Math.abs(previous.y - y) < 12;
-        const wanted = sameSpot ? previous.index + 1 : 0;
-
-        candidatesAt(x, y, (candidates) => {
-          if (candidates.length === 0) {
-            cycleRef.current = null;
-            setHit(null);
-            setMode('selecting');
-            postHit(null, null, null);
-            return;
-          }
-          const index = wanted % candidates.length;
-          cycleRef.current = { x, y, index };
-          const { frame, entry } = candidates[index];
-          commitCandidate(frame, entry, { index, total: candidates.length });
-        });
-      },
-      [candidatesAt, commitCandidate],
-    );
-
-    /**
-     * Entering design mode preselects the BACKMOST element at the screen
-     * centre — usually the screen background, which is otherwise the hardest
-     * thing to reach by tap.
-     */
-    const preselectBackground = useCallback(() => {
-      const window = Dimensions.get('window');
-      candidatesAt(window.width / 2, window.height / 2, (candidates) => {
-        if (candidates.length === 0) return;
-        const index = candidates.length - 1;
-        cycleRef.current = null;
-        const { frame, entry } = candidates[index];
-        commitCandidate(frame, entry, { index, total: candidates.length });
-      });
-    }, [candidatesAt, commitCandidate]);
+    const select = useCallback((x: number, y: number) => {
+      lastTapRef.current = { x, y };
+      const found = asSelectable(hitTestAtPoint(appRef.current, x, y));
+      if (!found) {
+        // Nothing touchable here (or a screen-sized container): fall back to
+        // geometry so backgrounds and decorative layers are still selectable.
+        selectByGeometry(x, y);
+        return;
+      }
+      const result = { ...found, motion: motionForLoc(found.loc) };
+      setHit(result);
+      setMode('editing');
+      setSaveState({ status: 'idle' });
+      postHit(result.loc, result.name, result.style, result.motion);
+      if (result.loc) measureInstances(result.loc);
+    }, [measureInstances, selectByGeometry]);
 
     /**
      * Save → write source → hand off to Fast Refresh (6.1 / 6.2).
@@ -306,8 +288,11 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
             for (const key of result.applied) delete remaining[key];
             replaceOverride(loc, Object.keys(remaining).length > 0 ? remaining : null);
           }
-          // The frame is re-measured by the highlight effect once clearing
-          // the override bumps the store version — no re-hit-test needed.
+          const point = lastTapRef.current;
+          if (point) {
+            const refreshed = asSelectable(hitTestAtPoint(appRef.current, point.x, point.y));
+            if (refreshed) setHit(refreshed);
+          }
           setSaveState((state) => (state.status === 'saved' ? { status: 'idle' } : state));
         }, FAST_REFRESH_GRACE_MS);
       } catch {
@@ -332,9 +317,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
               setMode(command.on ? 'selecting' : 'off');
               setHit(null);
               setSaveState({ status: 'idle' });
-              cycleRef.current = null;
-              if (command.on) setTimeout(preselectBackground, 120);
-              else postHit(null, null, null);
+              if (!command.on) postHit(null, null, null);
             } else if (command.type === 'select') selectFromDashboard(command.loc);
             else if (command.type === 'override') setOverride(command.loc, command.patch);
             else if (command.type === 'save') save(command.loc);
@@ -348,7 +331,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       return () => {
         active = false;
       };
-    }, [selectFromDashboard, save, preselectBackground]);
+    }, [selectFromDashboard, save]);
 
     // Tree push while design mode is open (8.3), plus mode reporting so the
     // dashboard's Enter/Exit button reflects reality. Keyed on open/closed,
