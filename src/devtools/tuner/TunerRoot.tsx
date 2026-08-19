@@ -5,7 +5,13 @@ import { fetchCommands, postHit, postMode, postTree, postWrite, postWriteConst }
 import { hitTestAtPoint, sanitizeStyle } from './hitTest';
 import { useTunerVersion } from './runtime';
 import { motionForLoc, motionKey, replayMotion } from './motion';
-import { collectTree, filterTunerNodes, findAllFibersByLoc, findFiberByLoc } from './treeWalker';
+import {
+  collectStampedFibers,
+  collectTree,
+  filterTunerNodes,
+  findAllFibersByLoc,
+  findFiberByLoc,
+} from './treeWalker';
 import { clearAll, getOverride, replaceOverride, setOverride, undo } from './store';
 import type { SaveState, TunerFrame, TunerHit, TunerMode } from './types';
 import { Overlay } from './ui/Overlay';
@@ -158,16 +164,77 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
     }, [measureInstances]);
 
 
+    /**
+     * Geometric hit-test: measure every stamped element and take the SMALLEST
+     * one containing the point. Used when native hit-testing finds nothing —
+     * which is the case for any `pointerEvents="none"` view (gradient
+     * backdrops, decorative layers), since native hit-testing skips them
+     * entirely. Screen-sized containers stay excluded, so this never
+     * resolves to "the whole screen".
+     */
+    const selectByGeometry = useCallback(
+      (x: number, y: number) => {
+        const stamped = collectStampedFibers();
+        if (stamped.length === 0) return;
+        const window = Dimensions.get('window');
+        const maxArea = window.width * window.height * 0.7;
+
+        let settled = 0;
+        let best: { area: number; frame: TunerFrame; entry: (typeof stamped)[number] } | null = null;
+
+        const finish = () => {
+          settled += 1;
+          if (settled < stamped.length || !best) return;
+          const { entry, frame } = best;
+          let style: Record<string, unknown> | null = null;
+          try {
+            style = sanitizeStyle(StyleSheet.flatten(entry.fiber.memoizedProps?.style as never));
+          } catch {
+            style = null;
+          }
+          const motion = motionForLoc(entry.loc);
+          setHit({ frame, loc: entry.loc, name: entry.name, hierarchy: [], style, motion });
+          setMode('editing');
+          setSaveState({ status: 'idle' });
+          postHit(entry.loc, entry.name, style, motion);
+          measureInstances(entry.loc);
+        };
+
+        for (const entry of stamped) {
+          const measure = entry.fiber.stateNode?.measureInWindow;
+          if (typeof measure !== 'function') {
+            finish();
+            continue;
+          }
+          measure((mx, my, width, height) => {
+            const area = width * height;
+            const contains = x >= mx && x <= mx + width && y >= my && y <= my + height;
+            if (contains && area > 0 && area <= maxArea && (!best || area < best.area)) {
+              best = { area, frame: { left: mx, top: my, width, height }, entry };
+            }
+            finish();
+          });
+        }
+      },
+      [measureInstances],
+    );
+
     const select = useCallback((x: number, y: number) => {
       lastTapRef.current = { x, y };
       const found = asSelectable(hitTestAtPoint(appRef.current, x, y));
-      const result = found ? { ...found, motion: motionForLoc(found.loc) } : null;
+      if (!found) {
+        // Nothing touchable here (or a screen-sized container): fall back to
+        // geometry so backgrounds and decorative layers are still selectable.
+        selectByGeometry(x, y);
+        return;
+      }
+      const result = { ...found, motion: motionForLoc(found.loc) };
       setHit(result);
-      setMode(result ? 'editing' : 'selecting');
+      setMode('editing');
       setSaveState({ status: 'idle' });
-      postHit(result?.loc ?? null, result?.name ?? null, result?.style ?? null, result?.motion);
-      if (result?.loc) measureInstances(result.loc);
-    }, [measureInstances]);
+      postHit(result.loc, result.name, result.style, result.motion);
+      if (result.loc) measureInstances(result.loc);
+    }, [measureInstances, selectByGeometry]);
 
     /**
      * Save → write source → hand off to Fast Refresh (6.1 / 6.2).

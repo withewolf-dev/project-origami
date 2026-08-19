@@ -142,6 +142,37 @@ function eachRoot(visit: (root: FiberLike | undefined) => void): void {
   }
 }
 
+export type StampedFiber = { loc: string; name: string; fiber: MeasurableFiber };
+
+function collectStamped(fiber: FiberLike | null | undefined, out: StampedFiber[]): void {
+  let node = fiber;
+  while (node) {
+    const loc = node.memoizedProps?.__tunerLoc;
+    const measurable = (node as MeasurableFiber).stateNode?.measureInWindow;
+    if (typeof loc === 'string' && typeof measurable === 'function') {
+      out.push({
+        loc,
+        name: typeof node.type === 'string' ? node.type : 'node',
+        fiber: node as MeasurableFiber,
+      });
+    }
+    if (node.child) collectStamped(node.child, out);
+    node = node.sibling;
+  }
+}
+
+/**
+ * Every stamped element that can be measured — the input to geometric
+ * hit-testing. Native hit-testing skips `pointerEvents="none"` views
+ * (backgrounds, decorative layers), so they are unreachable by tap; walking
+ * fibers reaches them because it does not care about touch at all.
+ */
+export function collectStampedFibers(): StampedFiber[] {
+  const out: StampedFiber[] = [];
+  eachRoot((root) => collectStamped(root, out));
+  return out;
+}
+
 /**
  * All live instances of a stamped element. A `.map()` renders one JSX
  * element many times — every instance shares the loc, and a StyleSheet edit
