@@ -15,12 +15,12 @@ const MOTION_ID = 'src/demo/CascadingAmount.tsx';
  * and "faster".
  */
 export const MOTION = {
-  stagger: 6,
-  damping: 22,
-  stiffness: 30,
-  mass: 1,
-  rise: 10,
-  startScale: 0.86,
+  stagger: 0,
+  damping: 35,
+  stiffness: 130,
+  mass: 1.1,
+  rise: 80,
+  startScale: 0.4,
 };
 
 registerMotion(MOTION_ID, 'MOTION', MOTION, {
