@@ -15,10 +15,9 @@ type Props = {
 };
 
 /**
- * Content is hidden while the gradient is being tuned in isolation — flip to
- * `true` to bring the whole screen back. Everything below is untouched.
+ * Flip to `false` to hide the content and tune the gradient in isolation.
  */
-const SHOW_CONTENT = false;
+const SHOW_CONTENT = true;
 
 const GRADIENT = [
   '#4470FF', '#3A63FA', '#2F55F2', '#2447E8',
@@ -169,7 +168,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    bottom: 0,
+    height: 620,
   },
   band: {
     flex: 1,
