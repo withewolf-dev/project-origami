@@ -14,7 +14,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
  * Task 1.3 verified each element below resolves to its own source line via
  * getInspectorDataForViewAtPoint; keep the shapes varied when editing.
  */
-export function Playground({ onOpenDemo }: { onOpenDemo?: () => void }) {
+export function Playground({
+  onOpenDemo,
+  onOpenHome,
+}: {
+  onOpenDemo?: () => void;
+  onOpenHome?: () => void;
+}) {
   const [taps, setTaps] = useState(0);
 
   return (
@@ -40,6 +46,10 @@ export function Playground({ onOpenDemo }: { onOpenDemo?: () => void }) {
 
       <Pressable style={styles.demoLink} onPress={onOpenDemo}>
         <Text style={styles.demoLinkLabel}>Open expense demo →</Text>
+      </Pressable>
+
+      <Pressable style={styles.demoLink} onPress={onOpenHome}>
+        <Text style={styles.demoLinkLabel}>Open home demo →</Text>
       </Pressable>
     </ScrollView>
   );

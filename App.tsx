@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Pressable } from 'react-native';
 
 import { ExpenseCalculator } from './src/demo/ExpenseCalculator';
+import { RevolutHome } from './src/demo/RevolutHome';
 import { Playground } from './src/devtools/tuner/Playground';
 import { gateLog } from './src/gate';
 import { ProgressScreen } from './src/screens/ProgressScreen';
@@ -24,6 +25,8 @@ type RootStackParamList = {
   Playground: undefined;
   // Dev-only tuner demo: a realistic dark UI (Revolut-style calculator).
   ExpenseDemo: undefined;
+  // Dev-only tuner demo: a gradient-heavy home screen.
+  HomeDemo: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -127,7 +130,17 @@ export default function App() {
         {__DEV__ ? (
           <Stack.Screen name="Playground" options={{ title: 'Playground' }}>
             {({ navigation }: NativeStackScreenProps<RootStackParamList, 'Playground'>) => (
-              <Playground onOpenDemo={() => navigation.navigate('ExpenseDemo')} />
+              <Playground
+                onOpenDemo={() => navigation.navigate('ExpenseDemo')}
+                onOpenHome={() => navigation.navigate('HomeDemo')}
+              />
+            )}
+          </Stack.Screen>
+        ) : null}
+        {__DEV__ ? (
+          <Stack.Screen name="HomeDemo" options={{ headerShown: false }}>
+            {({ navigation }: NativeStackScreenProps<RootStackParamList, 'HomeDemo'>) => (
+              <RevolutHome onClose={() => navigation.goBack()} />
             )}
           </Stack.Screen>
         ) : null}
