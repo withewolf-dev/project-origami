@@ -15,12 +15,15 @@ const MOTION_ID = 'src/demo/CascadingAmount.tsx';
  * and "faster".
  */
 export const MOTION = {
-  stagger: 0,
-  damping: 35,
-  stiffness: 130,
-  mass: 1.1,
-  rise: 80,
-  startScale: 0.4,
+  // Just past critical damping (2·√(stiffness·mass) ≈ 19) so each glyph glides
+  // to rest without overshoot, and a soft stagger so the cascade reads as one
+  // wave travelling left to right rather than a simultaneous snap.
+  stagger: 45,
+  damping: 20,
+  stiffness: 90,
+  mass: 1,
+  rise: 44,
+  startScale: 0.78,
 };
 
 registerMotion(MOTION_ID, 'MOTION', MOTION, {
@@ -150,8 +153,12 @@ const styles = StyleSheet.create({
   },
   symbol: {
     color: '#8E8E93',
-    fontSize: 56,
+    // Same size as the digits, so the symbol matches their cap height exactly;
+    // it stays quieter through colour alone. Baseline alignment then needs no
+    // nudge — equal font sizes already put the tops in line.
+    fontSize: 76,
     fontWeight: '700',
+    marginRight: 8,
   },
   digit: {
     color: '#FFFFFF',

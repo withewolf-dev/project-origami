@@ -2,7 +2,7 @@ import { type ComponentType, useCallback, useEffect, useRef, useState } from 're
 import { Dimensions, StyleSheet, View } from 'react-native';
 
 import { fetchCommands, postHit, postMode, postTree, postWrite, postWriteConst } from './devServer';
-import { hitTestAtPoint } from './hitTest';
+import { hitTestAtPoint, sanitizeStyle } from './hitTest';
 import { useTunerVersion } from './runtime';
 import { motionForLoc, motionKey, replayMotion } from './motion';
 import { collectTree, filterTunerNodes, findAllFibersByLoc, findFiberByLoc } from './treeWalker';
@@ -139,8 +139,7 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       measure((x, y, width, height) => {
         let style: Record<string, unknown> | null = null;
         try {
-          const flat = StyleSheet.flatten(fiber.memoizedProps?.style as never);
-          style = flat && typeof flat === 'object' ? (flat as Record<string, unknown>) : null;
+          style = sanitizeStyle(StyleSheet.flatten(fiber.memoizedProps?.style as never));
         } catch {
           style = null;
         }

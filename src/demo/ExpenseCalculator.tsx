@@ -119,7 +119,7 @@ export function ExpenseCalculator({ onClose }: Props) {
         <View style={styles.expressionPill}>
           <Text style={styles.expressionText}>{expression}</Text>
         </View>
-        <CascadingAmount symbol="€" value={formatAmount(total)} />
+        <CascadingAmount symbol="₹" value={formatAmount(total)} />
         <View style={styles.ratePill}>
           <Text style={styles.rateText}>⟳ ${usd} (€1 = $1,164) ›</Text>
         </View>

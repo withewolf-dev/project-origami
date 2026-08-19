@@ -40,6 +40,24 @@ type Renderer = {
   };
 };
 
+/**
+ * Keep only primitive style values. A flattened style can carry Animated
+ * nodes (opacity: AnimatedValue, transform: [...]) which are CIRCULAR —
+ * JSON.stringify throws on them, which killed selection of any animated
+ * element mid-tap. Primitives are also exactly the set the tuner can edit.
+ */
+export function sanitizeStyle(
+  flat: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!flat || typeof flat !== 'object') return null;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(flat)) {
+    const kind = typeof value;
+    if (kind === 'number' || kind === 'string' || kind === 'boolean') out[key] = value;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 function readLoc(props: Record<string, unknown> | null | undefined): string | null {
   const value = props?.__tunerLoc;
   return typeof value === 'string' ? value : null;
@@ -89,8 +107,7 @@ export function hitTestAtPoint(
         // flatten resolves all three into a plain object.
         let style: Record<string, unknown> | null = null;
         try {
-          const flat = StyleSheet.flatten(viewData.props?.style as never);
-          style = flat && typeof flat === 'object' ? (flat as Record<string, unknown>) : null;
+          style = sanitizeStyle(StyleSheet.flatten(viewData.props?.style as never));
         } catch {
           style = null;
         }
