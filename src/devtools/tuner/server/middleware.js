@@ -164,7 +164,12 @@ function createTunerMiddleware(projectRoot) {
           if (error) return json(res, 400, { error: 'bad-json' });
           hub.selection = typeof body.loc === 'string' ? body.loc : null;
           hub.selectionMeta = hub.selection
-            ? { name: body.name ?? null, style: body.style ?? null, motion: body.motion ?? null }
+            ? {
+                name: body.name ?? null,
+                style: body.style ?? null,
+                motion: body.motion ?? null,
+                instances: body.instances ?? 1,
+              }
             : null;
           return json(res, 200, { ok: true });
         });

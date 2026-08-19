@@ -108,9 +108,13 @@ export function withTuner<P extends object>(App: ComponentType<P>): ComponentTyp
       const finish = () => {
         settled += 1;
         if (settled < fibers.length) return;
-        setHit((current) =>
-          current && current.loc === loc ? { ...current, frames } : current,
-        );
+        setHit((current) => {
+          if (!current || current.loc !== loc) return current;
+          // Report the real instance count so the dashboard can say
+          // "N instances" too — and so this is observable from outside.
+          postHit(loc, current.name, current.style, current.motion, frames.length);
+          return { ...current, frames };
+        });
       };
       for (const fiber of fibers) {
         const measure = fiber.stateNode?.measureInWindow;

@@ -54,15 +54,16 @@ export function postHit(
   name: string | null,
   style: Record<string, unknown> | null,
   motion?: unknown,
+  instances?: number,
 ): void {
   // JSON.stringify throws SYNCHRONOUSLY on circular values — that must never
   // propagate into a tap handler. Styles are sanitized upstream, but a
   // reporting call is never allowed to break selection.
   let body: string;
   try {
-    body = JSON.stringify({ loc, name, style, motion: motion ?? null });
+    body = JSON.stringify({ loc, name, style, motion: motion ?? null, instances: instances ?? 1 });
   } catch {
-    body = JSON.stringify({ loc, name, style: null, motion: null });
+    body = JSON.stringify({ loc, name, style: null, motion: null, instances: instances ?? 1 });
   }
   fetch(`${getDevServerOrigin()}/__tuner/app/hit`, {
     method: 'POST',
