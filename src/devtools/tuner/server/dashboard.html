@@ -277,6 +277,28 @@
     border-radius: 8px;
     margin-bottom: 12px;
   }
+  #aiPrompt {
+    width: 100%;
+    background: var(--field);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    color: var(--hot);
+    font: 12px/1.4 -apple-system, sans-serif;
+    padding: 8px 10px;
+    resize: vertical;
+  }
+  #aiPrompt:focus { outline: none; border-color: var(--accent); }
+  #aiOut {
+    margin-top: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font: 10px/1.5 var(--mono);
+    color: var(--dim);
+    white-space: pre-wrap;
+  }
   .actions { margin-top: 20px; display: flex; gap: 8px; align-items: center; }
   #saveBtn {
     background: var(--accent);
@@ -683,6 +705,12 @@
         `<div class="hint">Every change replays automatically — this re-runs it on demand.</div>`;
     }
 
+    html += `<h3 class="sec">Ask AI</h3>` +
+      `<textarea id="aiPrompt" rows="2" placeholder="e.g. make this a horizontal row of chips, or extract this into a component"></textarea>` +
+      `<div class="actions" style="margin-top:8px"><button id="aiBtn" class="quiet">✦ Send to AI</button>` +
+      `<span id="aiStatus" class="hint" style="margin-top:0"></span></div>` +
+      `<pre id="aiOut" style="display:none"></pre>`;
+
     html += `<div class="actions"><button id="saveBtn">Save to source</button>` +
       `<button id="undoBtn" class="quiet">Undo (⌘Z)</button></div>` +
       `<div class="hint">Drag a label to scrub · type for exact · Save writes the file.</div>`;
@@ -794,6 +822,46 @@
       fetch('/__tuner/ui/save', { method: 'POST', body: JSON.stringify({ loc }) }).catch(() => {});
     });
     document.getElementById('undoBtn').addEventListener('click', postUndo);
+
+    const aiBtn = document.getElementById('aiBtn');
+    const aiPrompt = document.getElementById('aiPrompt');
+    aiBtn.addEventListener('click', () => {
+      const prompt = aiPrompt.value.trim();
+      if (!prompt) return;
+      fetch('/__tuner/ui/prompt', {
+        method: 'POST',
+        body: JSON.stringify({ loc, prompt }),
+      }).catch(() => {});
+    });
+    aiPrompt.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') aiBtn.click();
+    });
+  }
+
+  /** AI job status lives OUTSIDE the inspector rebuild cycle. */
+  function renderPromptJob(job) {
+    const statusEl2 = document.getElementById('aiStatus');
+    const outEl = document.getElementById('aiOut');
+    const btn = document.getElementById('aiBtn');
+    if (!statusEl2) return;
+    if (!job) {
+      statusEl2.textContent = '';
+      if (outEl) outEl.style.display = 'none';
+      if (btn) btn.disabled = false;
+      return;
+    }
+    if (job.status === 'running') {
+      statusEl2.textContent = `working… ${Math.round(job.elapsed / 1000)}s`;
+      if (btn) btn.disabled = true;
+      if (outEl) outEl.style.display = 'none';
+    } else {
+      statusEl2.textContent = job.status === 'done' ? 'done — change is live via Fast Refresh' : 'failed';
+      if (btn) btn.disabled = false;
+      if (outEl) {
+        outEl.textContent = job.output || '';
+        outEl.style.display = job.output ? 'block' : 'none';
+      }
+    }
   }
 
   function renderTree(nodes, selection, depth, out) {
@@ -845,6 +913,7 @@
       if (state.selection !== renderedSelection) {
         renderInspector(state.selection, state.selectionMeta);
       }
+      renderPromptJob(state.promptJob);
     } catch {
       statusEl.textContent = 'dev server unreachable';
       statusEl.classList.remove('live');

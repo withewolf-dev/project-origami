@@ -23,6 +23,7 @@
  * stamps and the in-app overlay reads back from the inspector.
  */
 /* global __dirname */
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -57,6 +58,8 @@ function createTunerMiddleware(projectRoot) {
     selectionMeta: null,
     /** Design-mode state as reported by the app (drives the dashboard button). */
     designOpen: false,
+    /** One AI edit job at a time (prompt-at-point). */
+    promptJob: null,
     commands: [],
     uiSeenAt: 0,
   };
@@ -197,6 +200,14 @@ function createTunerMiddleware(projectRoot) {
           selection: hub.selection,
           selectionMeta: hub.selectionMeta,
           designOpen: hub.designOpen,
+          promptJob: hub.promptJob
+            ? {
+                status: hub.promptJob.status,
+                prompt: hub.promptJob.prompt,
+                elapsed: Date.now() - hub.promptJob.startedAt,
+                output: hub.promptJob.output.slice(-400),
+              }
+            : null,
         });
       }
 
@@ -214,6 +225,85 @@ function createTunerMiddleware(projectRoot) {
       // dashboard so panel and browser can never drift apart.
       if (url.pathname === '/__tuner/ui/keys' && req.method === 'GET') {
         return json(res, 200, KEYS);
+      }
+
+      /**
+       * Prompt-at-point: the selection is a precise reference (loc + element
+       * name); the instruction is natural language; a headless `claude -p`
+       * run makes the edit, and Fast Refresh delivers it to the device.
+       * One job at a time; scoped tools, no Bash.
+       */
+      if (url.pathname === '/__tuner/ui/prompt' && req.method === 'POST') {
+        readJsonBody(req, (error, body) => {
+          if (error || typeof body.loc !== 'string' || typeof body.prompt !== 'string' || !body.prompt.trim()) {
+            return json(res, 400, { error: 'bad-prompt' });
+          }
+          if (hub.promptJob && hub.promptJob.status === 'running') {
+            return json(res, 409, { error: 'job-running' });
+          }
+          const parsed = parseLoc(body.loc);
+          if (!parsed) return json(res, 400, { error: 'bad-loc' });
+
+          const elementName = (hub.selectionMeta && hub.selectionMeta.name) || 'element';
+          const fullPrompt = [
+            'You are making a targeted edit in a React Native project.',
+            `Target: a <${elementName.replace(/^RCT/, '')}> element in ${parsed.file}`,
+            `at line ${parsed.line}, column ${parsed.column} (0-based col of the JSX opening tag).`,
+            'The user selected this element visually in a design tool and asked:',
+            `"${body.prompt.trim()}"`,
+            'Make the change directly by editing the file(s). Keep the edit minimal',
+            'and in the style of the surrounding code. Do not run git commands.',
+          ].join('\n');
+
+          const job = {
+            id: Date.now().toString(36),
+            loc: body.loc,
+            prompt: body.prompt.trim(),
+            status: 'running',
+            startedAt: Date.now(),
+            output: '',
+          };
+          hub.promptJob = job;
+
+          let child;
+          try {
+            child = spawn(
+              'claude',
+              ['-p', fullPrompt, '--permission-mode', 'acceptEdits', '--allowedTools', 'Read,Edit,Write,Grep,Glob'],
+              { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] },
+            );
+          } catch (spawnError) {
+            job.status = 'error';
+            job.output = `could not start claude: ${spawnError.message}`;
+            return json(res, 500, { error: 'spawn-failed' });
+          }
+
+          const timeout = setTimeout(() => {
+            job.output += '\n[timed out after 180s]';
+            child.kill();
+          }, 180_000);
+
+          const collect = (chunk) => {
+            job.output = (job.output + chunk.toString()).slice(-2000);
+          };
+          child.stdout.on('data', collect);
+          child.stderr.on('data', collect);
+          child.on('close', (code) => {
+            clearTimeout(timeout);
+            if (hub.promptJob === job) {
+              job.status = code === 0 ? 'done' : 'error';
+              job.endedAt = Date.now();
+            }
+          });
+          child.on('error', (childError) => {
+            clearTimeout(timeout);
+            job.status = 'error';
+            job.output += `\n${childError.message}`;
+          });
+
+          return json(res, 200, { ok: true, id: job.id });
+        });
+        return;
       }
 
       if (url.pathname === '/__tuner/ui/replay' && req.method === 'POST') {
